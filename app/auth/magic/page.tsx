@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getFingerprintOrCreate } from '@/lib/fingerprint';
 import { supabase } from '@/lib/supabase';
 
 type VerificationState = 'loading' | 'requires_2fa' | 'success' | 'error';
 
-export default function MagicLinkPage() {
+function MagicLinkContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -216,5 +216,29 @@ export default function MagicLinkPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function MagicLinkPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="w-full max-w-md">
+            <div className="bg-white rounded-lg shadow-md p-8">
+              <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+                🔐 管理画面アクセス
+              </h1>
+              <div className="text-center py-8">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-gray-600">読み込み中...</p>
+              </div>
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <MagicLinkContent />
+    </Suspense>
   );
 }
