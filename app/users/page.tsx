@@ -67,7 +67,9 @@ export default function UsersPage() {
     setSendStatus(null);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api/send-push';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL
+        ? `${process.env.NEXT_PUBLIC_API_URL}/send-push`
+        : '/api/send-push';
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {

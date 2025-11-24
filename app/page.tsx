@@ -26,7 +26,9 @@ export default function Home() {
 
     try {
       // Use NEXT_PUBLIC_API_URL if set (for Lambda), otherwise use local API route
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '/api/send-line';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL
+        ? `${process.env.NEXT_PUBLIC_API_URL}/send-line`
+        : '/api/send-line';
 
       const response = await fetch(apiUrl, {
         method: 'POST',
