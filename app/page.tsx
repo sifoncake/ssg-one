@@ -77,10 +77,10 @@ export default function Home() {
                   <>
                     <span className="text-gray-600">ログイン中: {user.email}</span>
                     <Link
-                      href="/users"
+                      href="/admin/dashboard"
                       className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition"
                     >
-                      ユーザー管理 →
+                      管理画面 →
                     </Link>
                   </>
                 ) : (
