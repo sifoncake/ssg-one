@@ -11,7 +11,9 @@
       "Bash(go build:*)",
       "Bash(go mod tidy:*)",
       "Bash(lsof:*)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "Bash(GOOS=linux GOARCH=amd64 go build:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

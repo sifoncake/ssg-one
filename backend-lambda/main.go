@@ -397,6 +397,30 @@ func verifyMagicToken(token, twoFactorCode, fingerprint string) (string, bool, e
 }
 
 // Handler is the Lambda handler function for API Gateway V2
+// getCORSHeaders returns the standard CORS headers for all responses
+func getCORSHeaders() map[string]string {
+	return map[string]string{
+		"Access-Control-Allow-Origin":  "*",
+		"Access-Control-Allow-Methods": "POST, OPTIONS, GET",
+		"Access-Control-Allow-Headers": "Content-Type,x-line-signature",
+		"Content-Type":                 "application/json",
+	}
+}
+
+// createResponse creates a standardized API Gateway response with CORS headers
+func createResponse(statusCode int, body string) events.APIGatewayV2HTTPResponse {
+	return events.APIGatewayV2HTTPResponse{
+		StatusCode: statusCode,
+		Headers:    getCORSHeaders(),
+		Body:       body,
+	}
+}
+
+// createJSONResponse creates a JSON API Gateway response with CORS headers
+func createJSONResponse(statusCode int, data interface{}) events.APIGatewayV2HTTPResponse {
+	return createResponse(statusCode, toJSON(data))
+}
+
 func Handler(request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	fmt.Printf("=== Lambda Handler Called ===\n")
 	fmt.Printf("Method: %s\n", request.RequestContext.HTTP.Method)
@@ -407,22 +431,13 @@ func Handler(request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPRes
 	fmt.Printf("Body preview: %.100s\n", request.Body)
 	fmt.Printf("===========================\n")
 
-	// CORS headers
-	headers := map[string]string{
-		"Access-Control-Allow-Origin":  "*",
-		"Access-Control-Allow-Methods": "POST, OPTIONS",
-		"Access-Control-Allow-Headers": "Content-Type,x-line-signature",
-		"Content-Type":                 "application/json",
-	}
+	// Get CORS headers
+	headers := getCORSHeaders()
 
 	// Handle OPTIONS preflight
 	if request.RequestContext.HTTP.Method == "OPTIONS" {
 		fmt.Println("Handling OPTIONS preflight request")
-		return events.APIGatewayV2HTTPResponse{
-			StatusCode: 200,
-			Headers:    headers,
-			Body:       "",
-		}, nil
+		return createResponse(200, ""), nil
 	}
 
 	// Only allow POST
@@ -828,10 +843,10 @@ func handleLINEWebhook(request events.APIGatewayV2HTTPRequest, headers map[strin
 				continue
 			}
 
-			// Get the base URL from environment or use localhost for development
+			// Get the base URL from environment or use production Vercel URL
 			baseURL := os.Getenv("NEXT_PUBLIC_URL")
 			if baseURL == "" {
-				baseURL = "http://localhost:3001"
+				baseURL = "https://ssg-one-two.vercel.app"
 			}
 
 			// Create reply message with magic link
