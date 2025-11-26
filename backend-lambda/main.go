@@ -846,7 +846,7 @@ func handleLINEWebhook(request events.APIGatewayV2HTTPRequest, headers map[strin
 			// Get the base URL from environment or use production Vercel URL
 			baseURL := os.Getenv("NEXT_PUBLIC_URL")
 			if baseURL == "" {
-				baseURL = "https://ssg-one-two.vercel.app"
+				baseURL = "https://ssg-one-seven.vercel.app"
 			}
 
 			// Create reply message with magic link
