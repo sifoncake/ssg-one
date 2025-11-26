@@ -116,6 +116,36 @@ type AdminToken struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// Claude API types
+type ClaudeMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type ClaudeRequest struct {
+	Model     string          `json:"model"`
+	MaxTokens int             `json:"max_tokens"`
+	System    string          `json:"system,omitempty"`
+	Messages  []ClaudeMessage `json:"messages"`
+}
+
+type ClaudeContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type ClaudeResponse struct {
+	ID      string          `json:"id"`
+	Type    string          `json:"type"`
+	Role    string          `json:"role"`
+	Content []ClaudeContent `json:"content"`
+	Model   string          `json:"model"`
+	Usage   struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
+}
+
 // getSupabaseClient initializes and returns a Supabase client
 func getSupabaseClient() (*supa.Client, error) {
 	supabaseURL := os.Getenv("SUPABASE_URL")
@@ -247,6 +277,91 @@ func generateTwoFactorCode() (string, error) {
 	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
+// generateFingerprint creates a device fingerprint from request headers
+func generateFingerprint(headers map[string]string) string {
+	// Collect relevant headers for fingerprinting
+	userAgent := headers["user-agent"]
+	if userAgent == "" {
+		userAgent = headers["User-Agent"]
+	}
+
+	// Create fingerprint string from available headers
+	fingerprintData := fmt.Sprintf("%s", userAgent)
+
+	// Encode to base64 for storage
+	return base64.StdEncoding.EncodeToString([]byte(fingerprintData))
+}
+
+// callClaudeAPI sends a message to Claude and returns the response
+func callClaudeAPI(userMessage string) (string, error) {
+	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	if apiKey == "" {
+		return "", fmt.Errorf("ANTHROPIC_API_KEY not configured")
+	}
+
+	// Prepare Claude API request
+	claudeReq := ClaudeRequest{
+		Model:     "claude-sonnet-4-20250514",
+		MaxTokens: 1024,
+		System:    "あなたは親切なアシスタントです。日本語で簡潔に回答してください。",
+		Messages: []ClaudeMessage{
+			{
+				Role:    "user",
+				Content: userMessage,
+			},
+		},
+	}
+
+	// Marshal request to JSON
+	reqBody, err := json.Marshal(claudeReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequest("POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	// Send request
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call Claude API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Check for HTTP errors
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Claude API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response
+	var claudeResp ClaudeResponse
+	if err := json.Unmarshal(respBody, &claudeResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Extract text from response
+	if len(claudeResp.Content) == 0 {
+		return "", fmt.Errorf("no content in response")
+	}
+
+	return claudeResp.Content[0].Text, nil
+}
+
 // createMagicLinkToken creates a magic link token and saves it to the database
 func createMagicLinkToken(lineUserID, fingerprint string) (string, string, error) {
 	fmt.Printf("Creating magic link token for user %s\n", lineUserID)
@@ -353,9 +468,12 @@ func verifyMagicToken(token, twoFactorCode, fingerprint string) (string, bool, e
 	lineUserID, _ := tokenData["line_user_id"].(string)
 
 	// Check if this is the same device
-	sameDevice := storedFingerprint != "" && storedFingerprint == fingerprint
+	// Since we store LINE User ID as fingerprint when creating from LINE webhook,
+	// if stored fingerprint matches LINE User ID, it's the same account/device
+	sameDevice := storedFingerprint != "" && storedFingerprint == lineUserID
 
-	fmt.Printf("Same device: %v (stored: %s, current: %s)\n", sameDevice, storedFingerprint, fingerprint)
+	fmt.Printf("Same device check: %v (stored fingerprint: %s, LINE User ID: %s)\n",
+		sameDevice, storedFingerprint, lineUserID)
 
 	// If not same device, require 2FA code
 	requiresTwoFA := !sameDevice
@@ -832,8 +950,10 @@ func handleLINEWebhook(request events.APIGatewayV2HTTPRequest, headers map[strin
 
 			// User is admin - generate magic link
 			fmt.Printf("User %s is an admin - generating magic link\n", userID)
-			// Empty fingerprint for LINE-initiated links (fingerprint will be captured on first access)
-			token, twoFactorCode, err := createMagicLinkToken(userID, "")
+			// Use LINE User ID as fingerprint for same-device detection
+			fingerprint := userID
+			fmt.Printf("Using LINE User ID as fingerprint: %s\n", fingerprint)
+			token, twoFactorCode, err := createMagicLinkToken(userID, fingerprint)
 			if err != nil {
 				fmt.Printf("Error creating magic link token: %v\n", err)
 				replyMessage := "マジックリンクの生成に失敗しました。"
@@ -858,8 +978,8 @@ func handleLINEWebhook(request events.APIGatewayV2HTTPRequest, headers map[strin
 ⏰ 有効期限：10分
 🔢 2段階認証コード：%s
 
-※別のデバイスからアクセスする場合は
-　上記コードの入力が必要です`, baseURL, token, twoFactorCode)
+✅ このLINEアプリからタップ → 自動ログイン
+⚠️ 別のデバイスから開く → コード入力が必要`, baseURL, token, twoFactorCode)
 
 			// Send reply
 			if err := sendLINEReply(replyToken, replyMessage, channelAccessToken); err != nil {
@@ -871,8 +991,18 @@ func handleLINEWebhook(request events.APIGatewayV2HTTPRequest, headers map[strin
 			continue
 		}
 
-		// Default reply for regular messages
-		replyMessage := fmt.Sprintf("受け取りました: %s", userMessage)
+		// Default reply for regular messages - use Claude AI
+		fmt.Printf("Calling Claude API for message: %s\n", userMessage)
+		claudeResponse, err := callClaudeAPI(userMessage)
+
+		var replyMessage string
+		if err != nil {
+			fmt.Printf("Claude API error: %v\n", err)
+			// Fallback to friendly error message
+			replyMessage = "申し訳ございません。現在応答できません。しばらくしてからもう一度お試しください。"
+		} else {
+			replyMessage = claudeResponse
+		}
 
 		// Send reply
 		if err := sendLINEReply(replyToken, replyMessage, channelAccessToken); err != nil {
