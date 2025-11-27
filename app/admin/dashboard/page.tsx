@@ -46,14 +46,14 @@ export default function DashboardPage() {
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">ダッシュボード</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8">ダッシュボード</h1>
 
         {loading ? (
           <div className="text-center py-12">
             <div className="text-gray-600">読み込み中...</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
             {/* Total Users Card */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between">
