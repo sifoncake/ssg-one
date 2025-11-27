@@ -1,0 +1,333 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import AdminLayout from '@/app/components/AdminLayout';
+import { supabase } from '@/lib/supabase';
+
+interface Sale {
+  id: string;
+  date: string;
+  customer_name: string;
+  staff_name: string;
+  item_name: string;
+  item_type: string;
+  amount: number;
+  payment_method: string;
+}
+
+interface MonthlyStats {
+  month: string;
+  revenue: number;
+}
+
+export default function SalesPage() {
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    itemType: '',
+  });
+
+  useEffect(() => {
+    fetchSales();
+  }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [sales, filters]);
+
+  const fetchSales = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch sales with customer and staff names
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select(`
+          id,
+          date,
+          item_name,
+          item_type,
+          amount,
+          payment_method,
+          customers (name),
+          staff (name)
+        `)
+        .order('date', { ascending: false });
+
+      if (salesError) throw salesError;
+
+      const formattedSales = (salesData || []).map((sale: any) => ({
+        id: sale.id,
+        date: sale.date,
+        customer_name: sale.customers?.name || '不明',
+        staff_name: sale.staff?.name || '不明',
+        item_name: sale.item_name,
+        item_type: sale.item_type,
+        amount: sale.amount,
+        payment_method: sale.payment_method,
+      }));
+
+      setSales(formattedSales);
+
+      // Calculate monthly stats
+      const stats = calculateMonthlyStats(formattedSales);
+      setMonthlyStats(stats);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch sales');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateMonthlyStats = (salesData: Sale[]): MonthlyStats[] => {
+    const monthMap: { [key: string]: number } = {};
+
+    salesData.forEach((sale) => {
+      const month = sale.date.substring(0, 7); // YYYY-MM
+      monthMap[month] = (monthMap[month] || 0) + sale.amount;
+    });
+
+    return Object.entries(monthMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, revenue]) => ({ month, revenue }));
+  };
+
+  const applyFilters = () => {
+    let filtered = [...sales];
+
+    if (filters.startDate) {
+      filtered = filtered.filter((sale) => sale.date >= filters.startDate);
+    }
+
+    if (filters.endDate) {
+      filtered = filtered.filter((sale) => sale.date <= filters.endDate);
+    }
+
+    if (filters.itemType) {
+      filtered = filtered.filter((sale) => sale.item_type === filters.itemType);
+    }
+
+    setFilteredSales(filtered);
+  };
+
+  const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.amount, 0);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ja-JP', {
+      style: 'currency',
+      currency: 'JPY',
+    }).format(amount);
+  };
+
+  const formatMonth = (monthString: string) => {
+    const [year, month] = monthString.split('-');
+    return `${year}年${month}月`;
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12">
+          <div className="text-gray-600">読み込み中...</div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="bg-red-50 text-red-800 p-4 rounded-md border border-red-200">
+          エラー: {error}
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  return (
+    <AdminLayout>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">売上管理</h1>
+        </div>
+
+        {/* Total Revenue Card */}
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 mb-6 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm font-medium mb-2">総売上（フィルター適用後）</p>
+              <p className="text-4xl font-bold">{formatCurrency(totalRevenue)}</p>
+              <p className="text-blue-100 text-sm mt-2">{filteredSales.length}件の取引</p>
+            </div>
+            <div className="text-6xl">💰</div>
+          </div>
+        </div>
+
+        {/* Monthly Stats Chart */}
+        {monthlyStats.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">月別売上推移</h2>
+            <div className="space-y-3">
+              {monthlyStats.map((stat) => {
+                const maxRevenue = Math.max(...monthlyStats.map((s) => s.revenue));
+                const percentage = (stat.revenue / maxRevenue) * 100;
+
+                return (
+                  <div key={stat.month}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="font-medium text-gray-700">{formatMonth(stat.month)}</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(stat.revenue)}</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div
+                        className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">フィルター</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                開始日
+              </label>
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                終了日
+              </label>
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                種別
+              </label>
+              <select
+                value={filters.itemType}
+                onChange={(e) => setFilters({ ...filters, itemType: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              >
+                <option value="">すべて</option>
+                <option value="施術">施術</option>
+                <option value="物販">物販</option>
+                <option value="回数券">回数券</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Sales Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    日付
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    顧客名
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    担当
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    商品名
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    種別
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    支払方法
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    金額
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredSales.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      該当するデータがありません
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSales.map((sale) => (
+                    <tr key={sale.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(sale.date)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {sale.customer_name}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {sale.staff_name}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {sale.item_name}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded ${
+                            sale.item_type === '施術'
+                              ? 'bg-blue-100 text-blue-800'
+                              : sale.item_type === '物販'
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-purple-100 text-purple-800'
+                          }`}
+                        >
+                          {sale.item_type}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {sale.payment_method}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                        {formatCurrency(sale.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </AdminLayout>
+  );
+}

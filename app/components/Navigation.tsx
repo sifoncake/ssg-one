@@ -11,7 +11,9 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { name: 'ダッシュボード', href: '/admin/dashboard', icon: '📊' },
-  { name: 'ユーザー管理', href: '/admin/users', icon: '👥' },
+  { name: '従業員管理', href: '/admin/staff', icon: '👥' },
+  { name: '顧客管理', href: '/admin/customers', icon: '💼' },
+  { name: '売上管理', href: '/admin/sales', icon: '💰' },
   { name: 'メッセージ配信', href: '/admin/broadcast', icon: '📢' },
   { name: '分析', href: '/admin/analytics', icon: '📈' },
   { name: '設定', href: '/admin/settings', icon: '⚙️' },
