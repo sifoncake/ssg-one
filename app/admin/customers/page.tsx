@@ -18,7 +18,7 @@ interface Customer {
   notes: string;
   primary_store: {
     store_name: string;
-  } | null;
+  }[];
   store_history: {
     store: {
       store_name: string;
@@ -189,10 +189,10 @@ export default function CustomersPage() {
                 </div>
 
                 <div className="space-y-2 text-sm text-gray-600 mb-4">
-                  {customer.primary_store && (
+                  {customer.primary_store && customer.primary_store.length > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-gray-400">🏢</span>
-                      <span className="truncate">{customer.primary_store.store_name}</span>
+                      <span className="truncate">{customer.primary_store[0].store_name}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
