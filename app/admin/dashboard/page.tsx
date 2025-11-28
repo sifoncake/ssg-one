@@ -104,6 +104,8 @@ export default function DashboardPage() {
 
       if (recentSalesError) throw recentSalesError;
 
+console.log('Recent sales raw data:', recentSalesData);
+
       const formattedRecentSales = (recentSalesData || []).map((sale: any) => ({
         id: sale.id,
         date: sale.date,
