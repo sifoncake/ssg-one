@@ -50,11 +50,15 @@ export default function StoresPage() {
 
       // Fetch current month revenue
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const year = new Date().getFullYear();
+      const month = new Date().getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select('store_id, amount')
         .gte('date', `${currentMonth}-01`)
-        .lte('date', `${currentMonth}-31`);
+        .lte('date', `${currentMonth}-${lastDay.toString().padStart(2, '0')}`);
 
       if (salesError) throw salesError;
 

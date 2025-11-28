@@ -55,6 +55,10 @@ export default function DashboardPage() {
 
       // Get current month store performance
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const year = new Date().getFullYear();
+      const month = new Date().getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+
       const { data: storesData, error: storesError } = await supabase
         .from('stores')
         .select('id, store_name, monthly_target')
@@ -67,7 +71,7 @@ export default function DashboardPage() {
         .from('sales')
         .select('store_id, amount')
         .gte('date', `${currentMonth}-01`)
-        .lte('date', `${currentMonth}-31`);
+        .lte('date', `${currentMonth}-${lastDay.toString().padStart(2, '0')}`);
 
       if (monthlySalesError) throw monthlySalesError;
 
