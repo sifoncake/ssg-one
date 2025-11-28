@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 interface Sale {
   id: string;
   date: string;
+  store_name: string;
   customer_name: string;
   staff_name: string;
   item_name: string;
@@ -18,12 +19,19 @@ interface Sale {
 interface MonthlyStats {
   month: string;
   revenue: number;
+  stores: { [storeName: string]: number };
+}
+
+interface Store {
+  id: string;
+  store_name: string;
 }
 
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +39,7 @@ export default function SalesPage() {
     startDate: '',
     endDate: '',
     itemType: '',
+    storeId: '',
   });
 
   useEffect(() => {
@@ -45,7 +54,16 @@ export default function SalesPage() {
     try {
       setLoading(true);
 
-      // Fetch sales with customer and staff names
+      // Fetch stores
+      const { data: storesData, error: storesError } = await supabase
+        .from('stores')
+        .select('id, store_name')
+        .order('store_name');
+
+      if (storesError) throw storesError;
+      setStores(storesData || []);
+
+      // Fetch sales with store, customer, and staff names
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select(`
@@ -55,8 +73,9 @@ export default function SalesPage() {
           item_type,
           amount,
           payment_method,
-          customers (name),
-          staff (name)
+          store:stores(store_name),
+          customer:customers(name),
+          staff:staff(name)
         `)
         .order('date', { ascending: false });
 
@@ -65,7 +84,8 @@ export default function SalesPage() {
       const formattedSales = (salesData || []).map((sale: any) => ({
         id: sale.id,
         date: sale.date,
-        customer_name: sale.customers?.name || '不明',
+        store_name: sale.store?.store_name || '不明',
+        customer_name: sale.customer?.name || '不明',
         staff_name: sale.staff?.name || '不明',
         item_name: sale.item_name,
         item_type: sale.item_type,
@@ -86,16 +106,20 @@ export default function SalesPage() {
   };
 
   const calculateMonthlyStats = (salesData: Sale[]): MonthlyStats[] => {
-    const monthMap: { [key: string]: number } = {};
+    const monthMap: { [key: string]: { total: number; stores: { [storeName: string]: number } } } = {};
 
     salesData.forEach((sale) => {
       const month = sale.date.substring(0, 7); // YYYY-MM
-      monthMap[month] = (monthMap[month] || 0) + sale.amount;
+      if (!monthMap[month]) {
+        monthMap[month] = { total: 0, stores: {} };
+      }
+      monthMap[month].total += sale.amount;
+      monthMap[month].stores[sale.store_name] = (monthMap[month].stores[sale.store_name] || 0) + sale.amount;
     });
 
     return Object.entries(monthMap)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, revenue]) => ({ month, revenue }));
+      .map(([month, data]) => ({ month, revenue: data.total, stores: data.stores }));
   };
 
   const applyFilters = () => {
@@ -111,6 +135,13 @@ export default function SalesPage() {
 
     if (filters.itemType) {
       filtered = filtered.filter((sale) => sale.item_type === filters.itemType);
+    }
+
+    if (filters.storeId) {
+      const selectedStore = stores.find((s) => s.id === filters.storeId);
+      if (selectedStore) {
+        filtered = filtered.filter((sale) => sale.store_name === selectedStore.store_name);
+      }
     }
 
     setFilteredSales(filtered);
@@ -181,11 +212,15 @@ export default function SalesPage() {
         {/* Monthly Stats Chart */}
         {monthlyStats.length > 0 && (
           <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">月別売上推移</h2>
-            <div className="space-y-3">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">月別売上推移（店舗別）</h2>
+            <div className="space-y-4">
               {monthlyStats.map((stat) => {
                 const maxRevenue = Math.max(...monthlyStats.map((s) => s.revenue));
-                const percentage = (stat.revenue / maxRevenue) * 100;
+                const storeColors: { [key: string]: string } = {
+                  '渋谷店': 'bg-blue-600',
+                  '新宿店': 'bg-green-600',
+                  '池袋店': 'bg-purple-600',
+                };
 
                 return (
                   <div key={stat.month}>
@@ -193,11 +228,27 @@ export default function SalesPage() {
                       <span className="font-medium text-gray-700">{formatMonth(stat.month)}</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(stat.revenue)}</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div
-                        className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                        style={{ width: `${percentage}%` }}
-                      />
+                    <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden flex">
+                      {Object.entries(stat.stores).map(([storeName, storeRevenue], idx) => {
+                        const storePercentage = (storeRevenue / stat.revenue) * 100;
+                        const colorClass = storeColors[storeName] || `bg-gray-${400 + idx * 100}`;
+                        return (
+                          <div
+                            key={storeName}
+                            className={`${colorClass} h-4 transition-all duration-300`}
+                            style={{ width: `${storePercentage}%` }}
+                            title={`${storeName}: ${formatCurrency(storeRevenue)}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-3 mt-2 text-xs text-gray-600">
+                      {Object.entries(stat.stores).map(([storeName, storeRevenue]) => (
+                        <div key={storeName} className="flex items-center gap-1">
+                          <span className={`w-3 h-3 rounded ${storeColors[storeName] || 'bg-gray-400'}`} />
+                          <span>{storeName}: {formatCurrency(storeRevenue)}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
@@ -209,7 +260,24 @@ export default function SalesPage() {
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">フィルター</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                店舗
+              </label>
+              <select
+                value={filters.storeId}
+                onChange={(e) => setFilters({ ...filters, storeId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              >
+                <option value="">全店舗</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.store_name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 開始日
@@ -260,6 +328,9 @@ export default function SalesPage() {
                     日付
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    店舗
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     顧客名
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -282,7 +353,7 @@ export default function SalesPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredSales.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                       該当するデータがありません
                     </td>
                   </tr>
@@ -291,6 +362,9 @@ export default function SalesPage() {
                     <tr key={sale.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {formatDate(sale.date)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {sale.store_name}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {sale.customer_name}

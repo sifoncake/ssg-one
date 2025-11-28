@@ -4,13 +4,32 @@ import { useState, useEffect } from 'react';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
+interface StoreStats {
+  store_name: string;
+  revenue: number;
+  transactions: number;
+  target: number;
+  percentage: number;
+}
+
+interface RecentSale {
+  id: string;
+  date: string;
+  customer_name: string;
+  store_name: string;
+  amount: number;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    messagesToday: 0,
-    activeUsers: 0,
+    totalCustomers: 0,
+    totalSales: 0,
+    totalRevenue: 0,
   });
+  const [storeStats, setStoreStats] = useState<StoreStats[]>([]);
+  const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -18,108 +37,278 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      // Get total users
-      const { count: totalUsers } = await supabase
-        .from('line_users')
+      setLoading(true);
+
+      // Get total customers
+      const { count: totalCustomers } = await supabase
+        .from('customers')
         .select('*', { count: 'exact', head: true });
 
-      // Get active users (last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const { count: activeUsers } = await supabase
-        .from('line_users')
-        .select('*', { count: 'exact', head: true })
-        .gte('last_seen_at', sevenDaysAgo.toISOString());
+      // Get total sales and revenue (all time)
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select('amount');
+
+      if (salesError) throw salesError;
+
+      const totalRevenue = (salesData || []).reduce((sum: number, sale: any) => sum + sale.amount, 0);
+
+      // Get current month store performance
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const { data: storesData, error: storesError } = await supabase
+        .from('stores')
+        .select('id, store_name, monthly_target')
+        .eq('status', 'active');
+
+      if (storesError) throw storesError;
+
+      // Get current month sales by store
+      const { data: monthlySalesData, error: monthlySalesError } = await supabase
+        .from('sales')
+        .select('store_id, amount')
+        .gte('date', `${currentMonth}-01`)
+        .lte('date', `${currentMonth}-31`);
+
+      if (monthlySalesError) throw monthlySalesError;
+
+      const storePerformance = (storesData || []).map((store: any) => {
+        const storeSales = (monthlySalesData || []).filter((s: any) => s.store_id === store.id);
+        const revenue = storeSales.reduce((sum: number, s: any) => sum + (s.amount || 0), 0);
+        const percentage = store.monthly_target > 0 ? (revenue / store.monthly_target) * 100 : 0;
+
+        return {
+          store_name: store.store_name,
+          revenue,
+          transactions: storeSales.length,
+          target: store.monthly_target,
+          percentage,
+        };
+      });
+
+      // Get recent sales (last 10)
+      const { data: recentSalesData, error: recentSalesError } = await supabase
+        .from('sales')
+        .select(`
+          id,
+          date,
+          amount,
+          customer:customers(name),
+          store:stores(store_name)
+        `)
+        .order('date', { ascending: false })
+        .limit(10);
+
+      if (recentSalesError) throw recentSalesError;
+
+      const formattedRecentSales = (recentSalesData || []).map((sale: any) => ({
+        id: sale.id,
+        date: sale.date,
+        customer_name: sale.customer?.name || '不明',
+        store_name: sale.store?.store_name || '不明',
+        amount: sale.amount,
+      }));
 
       setStats({
-        totalUsers: totalUsers || 0,
-        messagesToday: 0, // Mock data
-        activeUsers: activeUsers || 0,
+        totalCustomers: totalCustomers || 0,
+        totalSales: salesData?.length || 0,
+        totalRevenue,
       });
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
+      setStoreStats(storePerformance);
+      setRecentSales(formattedRecentSales);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch stats');
     } finally {
       setLoading(false);
     }
   };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('ja-JP', {
+      style: 'currency',
+      currency: 'JPY',
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  };
+
+  const getPerformanceColor = (percentage: number) => {
+    if (percentage >= 100) return 'bg-green-100 text-green-800';
+    if (percentage >= 80) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="text-center py-12">
+          <div className="text-gray-600">読み込み中...</div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <div className="bg-red-50 text-red-800 p-4 rounded-md border border-red-200">
+          エラー: {error}
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout>
       <div className="max-w-7xl mx-auto">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8">ダッシュボード</h1>
 
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="text-gray-600">読み込み中...</div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-            {/* Total Users Card */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">総ユーザー数</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {stats.totalUsers}
-                  </p>
-                </div>
-                <div className="text-4xl">👥</div>
+        {/* Total Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          {/* Total Customers Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">総顧客数</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.totalCustomers}
+                </p>
               </div>
-            </div>
-
-            {/* Messages Today Card */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">今日の配信数</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {stats.messagesToday}
-                  </p>
-                </div>
-                <div className="text-4xl">📨</div>
-              </div>
-            </div>
-
-            {/* Active Users Card */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">
-                    アクティブユーザー
-                  </p>
-                  <p className="text-sm text-gray-500 mt-1">過去7日間</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">
-                    {stats.activeUsers}
-                  </p>
-                </div>
-                <div className="text-4xl">🔥</div>
-              </div>
+              <div className="text-4xl">👥</div>
             </div>
           </div>
-        )}
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow">
+          {/* Total Sales Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">総売上件数</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {stats.totalSales.toLocaleString()}
+                </p>
+              </div>
+              <div className="text-4xl">📊</div>
+            </div>
+          </div>
+
+          {/* Total Revenue Card */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow p-6 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-blue-100 text-sm font-medium">総売上額</p>
+                <p className="text-3xl font-bold mt-2">
+                  {formatCurrency(stats.totalRevenue)}
+                </p>
+              </div>
+              <div className="text-4xl">💰</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Store Performance */}
+        <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">最近のアクティビティ</h2>
+            <h2 className="text-xl font-semibold text-gray-900">店舗別売上（今月）</h2>
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              {[
-                { time: '10分前', activity: '新規ユーザー登録', icon: '👤' },
-                { time: '1時間前', activity: 'メッセージ配信完了', icon: '📢' },
-                { time: '3時間前', activity: '管理画面アクセス', icon: '🔐' },
-                { time: '5時間前', activity: '新規ユーザー登録', icon: '👤' },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center gap-4 py-2">
-                  <span className="text-2xl">{item.icon}</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{item.activity}</p>
-                    <p className="text-xs text-gray-500">{item.time}</p>
+              {storeStats.map((store) => (
+                <div key={store.store_name} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900">{store.store_name}</h3>
+                    <span className={`px-3 py-1 text-xs font-medium rounded ${getPerformanceColor(store.percentage)}`}>
+                      {store.percentage.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+                    <div>
+                      <p className="text-gray-500 text-xs">売上額</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(store.revenue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">目標</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(store.target)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">取引数</p>
+                      <p className="font-semibold text-gray-900">{store.transactions}件</p>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div
+                      className={`h-2.5 rounded-full ${
+                        store.percentage >= 100
+                          ? 'bg-green-600'
+                          : store.percentage >= 80
+                          ? 'bg-yellow-500'
+                          : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min(store.percentage, 100)}%` }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Recent Sales */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">最近の売上</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    日付
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    店舗
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    顧客
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    金額
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {recentSales.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                      売上データがありません
+                    </td>
+                  </tr>
+                ) : (
+                  recentSales.map((sale) => (
+                    <tr key={sale.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(sale.date)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {sale.store_name}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {sale.customer_name}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                        {formatCurrency(sale.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
