@@ -92,8 +92,8 @@ export default function DashboardPage() {
           id,
           date,
           amount,
-          customer:customers(name),
-          store:stores(store_name)
+          customers!customer_id(name),
+          stores!store_id(store_name)
         `)
         .order('date', { ascending: false })
         .limit(10);
@@ -103,8 +103,8 @@ export default function DashboardPage() {
       const formattedRecentSales = (recentSalesData || []).map((sale: any) => ({
         id: sale.id,
         date: sale.date,
-        customer_name: sale.customer?.name || '不明',
-        store_name: sale.store?.store_name || '不明',
+        customer_name: sale.customers?.[0]?.name || '不明',
+        store_name: sale.stores?.[0]?.store_name || '不明',
         amount: sale.amount,
       }));
 

@@ -73,9 +73,9 @@ export default function SalesPage() {
           item_type,
           amount,
           payment_method,
-          store:stores(store_name),
-          customer:customers(name),
-          staff:staff(name)
+          stores!store_id(store_name),
+          customers!customer_id(name),
+          staff!staff_id(name)
         `)
         .order('date', { ascending: false });
 
