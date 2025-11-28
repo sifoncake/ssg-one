@@ -109,8 +109,8 @@ console.log('Recent sales raw data:', recentSalesData);
       const formattedRecentSales = (recentSalesData || []).map((sale: any) => ({
         id: sale.id,
         date: sale.date,
-        customer_name: sale.customers?.[0]?.name || '不明',
-        store_name: sale.stores?.[0]?.store_name || '不明',
+        customer_name: sale.customers?.name || '不明',
+        store_name: sale.stores?.store_name || '不明',
         amount: sale.amount,
       }));
 
