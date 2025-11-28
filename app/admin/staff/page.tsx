@@ -14,13 +14,13 @@ interface StaffMember {
   status: string;
   home_store: {
     store_name: string;
-  } | null;
+  }[];
   assignments: {
     role: string;
     assignment_type: string;
     store: {
       store_name: string;
-    } | null;
+    }[];
   }[];
   max_role: string;
   max_role_level: number;
@@ -124,7 +124,7 @@ export default function StaffPage() {
 
   const getStoreList = (member: StaffMember) => {
     const storeNames = member.assignments
-      .map((a) => a.store?.store_name || 'すべての店舗')
+      .map((a) => (a.store && a.store.length > 0 ? a.store[0].store_name : 'すべての店舗'))
       .filter((name, index, self) => self.indexOf(name) === index);
     return storeNames.join(', ');
   };
@@ -221,7 +221,9 @@ export default function StaffPage() {
                       {member.assignments.map((assignment, index) => (
                         <div key={index} className="text-xs">
                           <span className="font-medium">
-                            {assignment.store?.store_name || 'すべての店舗'}
+                            {assignment.store && assignment.store.length > 0
+                              ? assignment.store[0].store_name
+                              : 'すべての店舗'}
                           </span>
                           <span className="text-gray-500 ml-2">
                             ({ROLE_DISPLAY[assignment.role]?.ja || assignment.role}
