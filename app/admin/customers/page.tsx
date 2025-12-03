@@ -20,7 +20,7 @@ interface Customer {
     store_name: string;
   }[];
   store_history: {
-    store: {
+    stores: {
       store_name: string;
     };
     visit_count: number;
@@ -237,7 +237,7 @@ export default function CustomersPage() {
                             className="text-xs bg-gray-50 rounded p-2 flex justify-between"
                           >
                             <span className="font-medium">
-                              {history.store?.store_name || '不明'}
+                              {history.stores?.store_name || '不明'}
                             </span>
                             <div className="text-gray-600">
                               <span className="mr-3">{history.visit_count}回</span>
