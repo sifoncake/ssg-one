@@ -22,7 +22,7 @@ interface Customer {
   store_history: {
     stores: {
       store_name: string;
-    }[];
+    };
     visit_count: number;
     total_spent: number;
   }[];
@@ -86,10 +86,14 @@ console.log('Customers raw data:', customersData);
 console.log('History raw data:', historyData);
 
       // Combine data
-      const combinedData = (customersData || []).map((customer) => {
-        const customerHistory = (historyData || []).filter(
-          (h: any) => h.customer_id === customer.id
-        );
+      const combinedData = customersData.map((customer: any) => {
+        const customerHistory = historyData
+          .filter((h: any) => h.customer_id === customer.id)
+          .map((h: any) => ({
+            stores: Array.isArray(h.stores) ? h.stores[0] : h.stores,
+            visit_count: h.visit_count,
+            total_spent: h.total_spent,
+          }));
 
         return {
           ...customer,
@@ -240,7 +244,7 @@ console.log('History raw data:', historyData);
                             className="text-xs bg-gray-50 rounded p-2 flex justify-between"
                           >
                             <span className="font-medium">
-                              {history.stores?.[0]?.store_name || '不明'}
+                              {history.stores?.store_name || '不明'}
                             </span>
                             <div className="text-gray-600">
                               <span className="mr-3">{history.visit_count}回</span>
