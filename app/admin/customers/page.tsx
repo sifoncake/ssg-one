@@ -82,6 +82,9 @@ export default function CustomersPage() {
 
       if (historyError) throw historyError;
 
+console.log('Customers raw data:', customersData);
+console.log('History raw data:', historyData);
+
       // Combine data
       const combinedData = (customersData || []).map((customer) => {
         const customerHistory = (historyData || []).filter(
