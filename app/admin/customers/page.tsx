@@ -22,7 +22,7 @@ interface Customer {
   store_history: {
     store: {
       store_name: string;
-    }[];
+    };
     visit_count: number;
     total_spent: number;
   }[];
@@ -77,7 +77,7 @@ export default function CustomersPage() {
           customer_id,
           visit_count,
           total_spent,
-          store:stores(store_name)
+          stores!store_id(store_name)
         `);
 
       if (historyError) throw historyError;
@@ -237,7 +237,7 @@ export default function CustomersPage() {
                             className="text-xs bg-gray-50 rounded p-2 flex justify-between"
                           >
                             <span className="font-medium">
-                              {history.store && history.store.length > 0 ? history.store[0].store_name : '不明'}
+                              {history.store?.store_name || '不明'}
                             </span>
                             <div className="text-gray-600">
                               <span className="mr-3">{history.visit_count}回</span>
