@@ -4,6 +4,36 @@ import { useState, useEffect } from 'react';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
+// Raw Supabase response types
+interface SupabaseStore {
+  store_name: string;
+}
+
+interface SupabaseStaffData {
+  id: string;
+  staff_code: string;
+  name: string;
+  email: string;
+  phone: string;
+  hire_date: string;
+  status: string;
+  home_store: SupabaseStore[];
+}
+
+interface SupabaseAssignment {
+  staff_id: string;
+  role: string;
+  assignment_type: string;
+  store: SupabaseStore[];
+}
+
+// Formatted types for component state
+interface StaffAssignment {
+  role: string;
+  assignment_type: string;
+  store: SupabaseStore[];
+}
+
 interface StaffMember {
   id: string;
   staff_code: string;
@@ -12,16 +42,8 @@ interface StaffMember {
   phone: string;
   hire_date: string;
   status: string;
-  home_store: {
-    store_name: string;
-  }[];
-  assignments: {
-    role: string;
-    assignment_type: string;
-    store: {
-      store_name: string;
-    }[];
-  }[];
+  home_store: SupabaseStore[];
+  assignments: StaffAssignment[];
   max_role: string;
   max_role_level: number;
 }
@@ -76,14 +98,17 @@ export default function StaffPage() {
 
       if (assignmentsError) throw assignmentsError;
 
+      const typedStaff = staffData as SupabaseStaffData[];
+      const typedAssignments = assignmentsData as SupabaseAssignment[];
+
       // Combine data
-      const combinedData = (staffData || []).map((member) => {
-        const memberAssignments = (assignmentsData || []).filter(
-          (a: any) => a.staff_id === member.id
+      const combinedData: StaffMember[] = typedStaff.map((member) => {
+        const memberAssignments = typedAssignments.filter(
+          (a) => a.staff_id === member.id
         );
 
         // Calculate max role
-        const maxRole = memberAssignments.reduce((max, assignment: any) => {
+        const maxRole = memberAssignments.reduce((max, assignment) => {
           const currentLevel = ROLE_DISPLAY[assignment.role]?.level || 0;
           const maxLevel = ROLE_DISPLAY[max]?.level || 0;
           return currentLevel > maxLevel ? assignment.role : max;

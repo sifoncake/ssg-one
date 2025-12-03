@@ -4,6 +4,40 @@ import { useState, useEffect } from 'react';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
+// Raw Supabase response types
+interface SupabaseStore {
+  store_name: string;
+}
+
+interface SupabaseCustomer {
+  id: string;
+  customer_code: string;
+  name: string;
+  email: string;
+  phone: string;
+  first_visit_date: string;
+  last_visit_date: string;
+  total_visits: number;
+  total_spent: number;
+  customer_type: string;
+  notes: string;
+  primary_store: SupabaseStore[];
+}
+
+interface SupabaseStoreHistory {
+  customer_id: string;
+  visit_count: number;
+  total_spent: number;
+  stores: SupabaseStore | SupabaseStore[];
+}
+
+// Formatted types for component state
+interface StoreHistory {
+  stores: SupabaseStore;
+  visit_count: number;
+  total_spent: number;
+}
+
 interface Customer {
   id: string;
   customer_code: string;
@@ -16,16 +50,8 @@ interface Customer {
   total_spent: number;
   customer_type: string;
   notes: string;
-  primary_store: {
-    store_name: string;
-  }[];
-  store_history: {
-    stores: {
-      store_name: string;
-    };
-    visit_count: number;
-    total_spent: number;
-  }[];
+  primary_store: SupabaseStore[];
+  store_history: StoreHistory[];
 }
 
 const CUSTOMER_TYPE_DISPLAY: Record<string, { ja: string; color: string }> = {
@@ -82,14 +108,18 @@ export default function CustomersPage() {
 
       if (historyError) throw historyError;
 
-console.log('Customers raw data:', customersData);
-console.log('History raw data:', historyData);
+      console.log('Customers raw data:', customersData);
+      console.log('History raw data:', historyData);
+
+      // Type assertions for Supabase responses
+      const typedCustomers = customersData as SupabaseCustomer[];
+      const typedHistory = historyData as SupabaseStoreHistory[];
 
       // Combine data
-      const combinedData = customersData.map((customer: any) => {
-        const customerHistory = historyData
-          .filter((h: any) => h.customer_id === customer.id)
-          .map((h: any) => ({
+      const combinedData: Customer[] = typedCustomers.map((customer) => {
+        const customerHistory: StoreHistory[] = typedHistory
+          .filter((h) => h.customer_id === customer.id)
+          .map((h) => ({
             stores: Array.isArray(h.stores) ? h.stores[0] : h.stores,
             visit_count: h.visit_count,
             total_spent: h.total_spent,

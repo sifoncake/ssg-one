@@ -4,6 +4,39 @@ import { useState, useEffect } from 'react';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
+// Raw Supabase response types
+interface SupabaseSalesAmount {
+  amount: number;
+}
+
+interface SupabaseStoreData {
+  id: string;
+  store_name: string;
+  monthly_target: number;
+}
+
+interface SupabaseMonthlySale {
+  store_id: string;
+  amount: number;
+}
+
+interface SupabaseCustomer {
+  name: string;
+}
+
+interface SupabaseStore {
+  store_name: string;
+}
+
+interface SupabaseRecentSale {
+  id: string;
+  date: string;
+  amount: number;
+  customers: SupabaseCustomer;
+  stores: SupabaseStore;
+}
+
+// Formatted types for component state
 interface StoreStats {
   store_name: string;
   revenue: number;
@@ -51,7 +84,8 @@ export default function DashboardPage() {
 
       if (salesError) throw salesError;
 
-      const totalRevenue = (salesData || []).reduce((sum: number, sale: any) => sum + sale.amount, 0);
+      const typedSalesData = salesData as SupabaseSalesAmount[];
+      const totalRevenue = typedSalesData.reduce((sum, sale) => sum + sale.amount, 0);
 
       // Get current month store performance
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -75,9 +109,12 @@ export default function DashboardPage() {
 
       if (monthlySalesError) throw monthlySalesError;
 
-      const storePerformance = (storesData || []).map((store: any) => {
-        const storeSales = (monthlySalesData || []).filter((s: any) => s.store_id === store.id);
-        const revenue = storeSales.reduce((sum: number, s: any) => sum + (s.amount || 0), 0);
+      const typedStores = storesData as SupabaseStoreData[];
+      const typedMonthlySales = monthlySalesData as SupabaseMonthlySale[];
+
+      const storePerformance: StoreStats[] = typedStores.map((store) => {
+        const storeSales = typedMonthlySales.filter((s) => s.store_id === store.id);
+        const revenue = storeSales.reduce((sum, s) => sum + (s.amount || 0), 0);
         const percentage = store.monthly_target > 0 ? (revenue / store.monthly_target) * 100 : 0;
 
         return {
@@ -104,19 +141,24 @@ export default function DashboardPage() {
 
       if (recentSalesError) throw recentSalesError;
 
-console.log('Recent sales raw data:', recentSalesData);
+      console.log('Recent sales raw data:', recentSalesData);
 
-      const formattedRecentSales = (recentSalesData || []).map((sale: any) => ({
-        id: sale.id,
-        date: sale.date,
-        customer_name: sale.customers?.name || '不明',
-        store_name: sale.stores?.store_name || '不明',
-        amount: sale.amount,
-      }));
+      const formattedRecentSales: RecentSale[] = (recentSalesData || []).map((sale: any) => {
+        const customers = Array.isArray(sale.customers) ? sale.customers[0] : sale.customers;
+        const stores = Array.isArray(sale.stores) ? sale.stores[0] : sale.stores;
+        
+        return {
+          id: sale.id,
+          date: sale.date,
+          customer_name: customers?.name || '不明',
+          store_name: stores?.store_name || '不明',
+          amount: sale.amount,
+        };
+      });
 
       setStats({
         totalCustomers: totalCustomers || 0,
-        totalSales: salesData?.length || 0,
+        totalSales: typedSalesData?.length || 0,
         totalRevenue,
       });
       setStoreStats(storePerformance);

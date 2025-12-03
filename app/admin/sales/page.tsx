@@ -4,6 +4,32 @@ import { useState, useEffect } from 'react';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
+// Raw Supabase response types
+interface SupabaseStore {
+  store_name: string;
+}
+
+interface SupabaseCustomer {
+  name: string;
+}
+
+interface SupabaseStaff {
+  name: string;
+}
+
+interface SupabaseSale {
+  id: string;
+  date: string;
+  item_name: string;
+  item_type: string;
+  amount: number;
+  payment_method: string;
+  stores: SupabaseStore[];
+  customers: SupabaseCustomer[];
+  staff: SupabaseStaff[];
+}
+
+// Formatted types for component state
 interface Sale {
   id: string;
   date: string;
@@ -81,12 +107,13 @@ export default function SalesPage() {
 
       if (salesError) throw salesError;
 
-      const formattedSales = (salesData || []).map((sale: any) => ({
+      const typedSales = salesData as SupabaseSale[];
+      const formattedSales: Sale[] = typedSales.map((sale) => ({
         id: sale.id,
         date: sale.date,
-        store_name: sale.store?.store_name || '不明',
-        customer_name: sale.customer?.name || '不明',
-        staff_name: sale.staff?.name || '不明',
+        store_name: sale.stores?.[0]?.store_name || '不明',
+        customer_name: sale.customers?.[0]?.name || '不明',
+        staff_name: sale.staff?.[0]?.name || '不明',
         item_name: sale.item_name,
         item_type: sale.item_type,
         amount: sale.amount,

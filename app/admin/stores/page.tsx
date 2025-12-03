@@ -4,6 +4,29 @@ import { useState, useEffect } from 'react';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
+// Raw Supabase response types
+interface SupabaseStoreData {
+  id: string;
+  store_code: string;
+  store_name: string;
+  location: string;
+  opening_date: string;
+  manager_name: string;
+  phone: string;
+  status: string;
+  monthly_target: number;
+}
+
+interface SupabaseStaffAssignment {
+  store_id: string;
+}
+
+interface SupabaseSale {
+  store_id: string;
+  amount: number;
+}
+
+// Formatted types for component state
 interface Store {
   id: string;
   store_code: string;
@@ -62,15 +85,19 @@ export default function StoresPage() {
 
       if (salesError) throw salesError;
 
+      const typedStores = storesData as SupabaseStoreData[];
+      const typedStaff = staffData as SupabaseStaffAssignment[];
+      const typedSales = salesData as SupabaseSale[];
+
       // Combine data
-      const combinedData = (storesData || []).map((store) => {
-        const staffCount = (staffData || []).filter(
-          (s: any) => s.store_id === store.id
+      const combinedData: Store[] = typedStores.map((store) => {
+        const staffCount = typedStaff.filter(
+          (s) => s.store_id === store.id
         ).length;
 
-        const revenue = (salesData || [])
-          .filter((s: any) => s.store_id === store.id)
-          .reduce((sum: number, s: any) => sum + (s.amount || 0), 0);
+        const revenue = typedSales
+          .filter((s) => s.store_id === store.id)
+          .reduce((sum, s) => sum + (s.amount || 0), 0);
 
         const performancePercentage = store.monthly_target > 0
           ? (revenue / store.monthly_target) * 100
