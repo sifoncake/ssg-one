@@ -111,6 +111,10 @@ export default function DashboardPage() {
       const [year, month] = selectedMonth.split('-').map(Number);
       const lastDay = new Date(year, month, 0).getDate();
 
+      // デバッグ用
+      console.log('Selected month:', selectedMonth);
+      console.log('Date range:', `${selectedMonth}-01`, 'to', `${selectedMonth}-${lastDay.toString().padStart(2, '0')}`);
+
       const { data: storesData, error: storesError } = await supabase
         .from('stores')
         .select('id, store_name, monthly_target')
@@ -129,6 +133,11 @@ export default function DashboardPage() {
 
       const typedStores = storesData as SupabaseStoreData[];
       const typedMonthlySales = monthlySalesData as SupabaseMonthlySale[];
+      
+      // デバッグ用
+      console.log('Monthly sales data:', monthlySalesData);
+      console.log('Store performance before mapping:', typedStores);
+      console.log('Monthly sales count:', typedMonthlySales.length);
 
       const storePerformance: StoreStats[] = typedStores.map((store) => {
         const storeSales = typedMonthlySales.filter((s) => s.store_id === store.id);
