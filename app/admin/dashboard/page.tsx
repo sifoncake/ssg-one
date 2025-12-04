@@ -54,6 +54,25 @@ interface RecentSale {
 }
 
 export default function DashboardPage() {
+  // Generate last 12 months options (current month to 11 months ago)
+  const generateMonthOptions = () => {
+    const options = [];
+    const today = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const value = date.toISOString().slice(0, 7); // YYYY-MM
+      const label = new Intl.DateTimeFormat('ja-JP', {
+        year: 'numeric',
+        month: 'long',
+      }).format(date);
+      options.push({ value, label });
+    }
+    return options;
+  };
+
+  const monthOptions = generateMonthOptions();
+  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalSales: 0,
@@ -61,12 +80,13 @@ export default function DashboardPage() {
   });
   const [storeStats, setStoreStats] = useState<StoreStats[]>([]);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [selectedMonth]);
 
   const fetchStats = async () => {
     try {
@@ -87,11 +107,9 @@ export default function DashboardPage() {
       const typedSalesData = salesData as SupabaseSalesAmount[];
       const totalRevenue = typedSalesData.reduce((sum, sale) => sum + sale.amount, 0);
 
-      // Get current month store performance
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-      const year = new Date().getFullYear();
-      const month = new Date().getMonth();
-      const lastDay = new Date(year, month + 1, 0).getDate();
+      // Get selected month store performance
+      const [year, month] = selectedMonth.split('-').map(Number);
+      const lastDay = new Date(year, month, 0).getDate();
 
       const { data: storesData, error: storesError } = await supabase
         .from('stores')
@@ -100,12 +118,12 @@ export default function DashboardPage() {
 
       if (storesError) throw storesError;
 
-      // Get current month sales by store
+      // Get selected month sales by store
       const { data: monthlySalesData, error: monthlySalesError } = await supabase
         .from('sales')
         .select('store_id, amount')
-        .gte('date', `${currentMonth}-01`)
-        .lte('date', `${currentMonth}-${lastDay.toString().padStart(2, '0')}`);
+        .gte('date', `${selectedMonth}-01`)
+        .lte('date', `${selectedMonth}-${lastDay.toString().padStart(2, '0')}`);
 
       if (monthlySalesError) throw monthlySalesError;
 
@@ -217,6 +235,24 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8">ダッシュボード</h1>
 
+        {/* Month Selector */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            表示月
+          </label>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          >
+            {monthOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Total Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Total Customers Card */}
@@ -262,7 +298,12 @@ export default function DashboardPage() {
         {/* Store Performance */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">店舗別売上（今月）</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              店舗別売上（{new Intl.DateTimeFormat('ja-JP', {
+                year: 'numeric',
+                month: 'long',
+              }).format(new Date(selectedMonth + '-01'))}）
+            </h2>
           </div>
           <div className="p-6">
             <div className="space-y-4">
