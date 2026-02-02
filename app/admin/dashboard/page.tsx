@@ -130,10 +130,16 @@ export default function DashboardPage() {
         .lte('date', `${selectedMonth}-${lastDay.toString().padStart(2, '0')}`);
 
       if (monthlySalesError) throw monthlySalesError;
+      // デバッグ用
+      console.log('Query params:', {
+        selectedMonth,
+        startDate: `${selectedMonth}-01`,
+        endDate: `${selectedMonth}-${lastDay.toString().padStart(2, '0')}`
+      });
+      console.log('Monthly sales data:', monthlySalesData);
 
       const typedStores = storesData as SupabaseStoreData[];
-      const typedMonthlySales = monthlySalesData as SupabaseMonthlySale[];
-      
+      const typedMonthlySales = (monthlySalesData || []) as SupabaseMonthlySale[];
       // デバッグ用
       console.log('Monthly sales data:', monthlySalesData);
       console.log('Store performance before mapping:', typedStores);
