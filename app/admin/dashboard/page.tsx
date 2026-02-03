@@ -80,13 +80,40 @@ export default function DashboardPage() {
   });
   const [storeStats, setStoreStats] = useState<StoreStats[]>([]);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchStats();
+    initializeDashboard();
+  }, []);
+
+  useEffect(() => {
+    if (selectedMonth) {
+      fetchStats();
+    }
   }, [selectedMonth]);
+
+  const initializeDashboard = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .select('date')
+        .order('date', { ascending: false })
+        .limit(1);
+      
+      if (error) throw error;
+      
+      const latestMonth = data && data.length > 0 
+        ? data[0].date.slice(0, 7)
+        : new Date().toISOString().slice(0, 7);
+      
+      setSelectedMonth(latestMonth);
+    } catch (err) {
+      console.error('Failed to get latest month:', err);
+      setSelectedMonth(new Date().toISOString().slice(0, 7));
+    }
+  };
 
   const fetchStats = async () => {
     try {
