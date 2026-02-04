@@ -2,15 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, twoFactorCode, fingerprint } = await request.json();
+    const { token, twoFactorCode, fingerprint, lineIdToken } = await request.json();
 
     // Validate required fields
     if (!token) {
       return NextResponse.json({ error: 'Token is required' }, { status: 400 });
-    }
-
-    if (!fingerprint) {
-      return NextResponse.json({ error: 'Fingerprint is required' }, { status: 400 });
     }
 
     // Call Lambda verify-magic endpoint
@@ -28,6 +24,7 @@ export async function POST(request: NextRequest) {
         token,
         twoFactorCode,
         fingerprint,
+        lineIdToken,
       }),
     });
 

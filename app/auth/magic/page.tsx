@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getFingerprintOrCreate } from '@/lib/fingerprint';
 import { supabase } from '@/lib/supabase';
+import liff from '@line/liff';
 
 type VerificationState = 'loading' | 'requires_2fa' | 'success' | 'error';
 
@@ -16,9 +17,11 @@ function MagicLinkContent() {
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [lineIdToken, setLineIdToken] = useState<string | null>(null);
 
   // Track if verification has been attempted to prevent multiple calls
   const hasVerified = useRef(false);
+  const hasInitLiff = useRef(false);
 
   useEffect(() => {
     if (!token) {
@@ -35,6 +38,37 @@ function MagicLinkContent() {
     verifyToken();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    // LIFF is only useful in LINE in-app browser. On PC/regular browsers we simply won't have a token.
+    const init = async () => {
+      if (hasInitLiff.current) return;
+      hasInitLiff.current = true;
+
+      const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+      if (!liffId) return;
+
+      try {
+        await liff.init({ liffId });
+
+        // If we're not inside LINE, don't force login; PC flow should require 2FA anyway.
+        if (!liff.isInClient()) return;
+
+        if (!liff.isLoggedIn()) {
+          // This will redirect within LINE in-app browser.
+          liff.login({ redirectUri: window.location.href });
+          return;
+        }
+
+        const idToken = liff.getIDToken();
+        if (idToken) setLineIdToken(idToken);
+      } catch (e) {
+        console.warn('LIFF init failed (fallback to 2FA flow):', e);
+      }
+    };
+
+    void init();
+  }, []);
 
   const verifyToken = async (code?: string) => {
     try {
@@ -53,6 +87,7 @@ function MagicLinkContent() {
           token,
           twoFactorCode: code || '',
           fingerprint,
+          lineIdToken,
         }),
       });
 
