@@ -9,7 +9,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "",
   "dependencies": {
     "@line/liff": "^2.27.3",
@@ -19,8 +19,8 @@
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "axios": "^1.13.2",
-    "next": "^14.2.33",
+    "axios": "^1.13.5",
+    "next": "^16.1.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.9.3"
@@ -28,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "autoprefixer": "^10.4.22",
+    "baseline-browser-mapping": "^2.9.19",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17"
   }

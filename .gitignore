@@ -37,3 +37,4 @@ next-env.d.ts
 # other
 memo.txt
 config.txt
+.claude/*.local.json

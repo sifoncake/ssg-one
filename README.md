@@ -239,5 +239,10 @@ make build
 ### External APIs:
 - [LINE Messaging API](https://developers.line.biz/en/docs/messaging-api/) - Messaging platform
 
-# Updated
-# Updated
+# License
+
+MIT. See `LICENSE.md`.
+
+Third-party dependencies are licensed by their respective owners. LINE/LIFF usage is subject to LINE's terms:
+- https://developers.line.biz/en/docs/liff/developing-liff-apps/
+- https://terms2.line.me/LINE

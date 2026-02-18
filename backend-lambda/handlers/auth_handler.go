@@ -13,18 +13,21 @@ import (
 
 type AuthHandler struct {
 	supabaseService *services.SupabaseService
+	lineService     *services.LINEService
 }
 
-func NewAuthHandler(supabaseService *services.SupabaseService) *AuthHandler {
+func NewAuthHandler(supabaseService *services.SupabaseService, lineService *services.LINEService) *AuthHandler {
 	return &AuthHandler{
 		supabaseService: supabaseService,
+		lineService:     lineService,
 	}
 }
 
 type VerifyTokenRequest struct {
 	Token         string `json:"token"`
 	TwoFactorCode string `json:"twoFactorCode,omitempty"`
-	LineUserID    string `json:"lineUserId,omitempty"`
+	Fingerprint   string `json:"fingerprint,omitempty"`
+	LineIDToken   string `json:"lineIdToken,omitempty"`
 }
 
 type VerifyTokenResponse struct {
@@ -78,20 +81,23 @@ func (h *AuthHandler) HandleVerify(request events.APIGatewayV2HTTPRequest) event
 		})
 	}
 
-	// Check device fingerprint
-	// The fingerprint is the LINE User ID stored when the token was created
-	// We compare it with the line_user_id from the token record
-	// If they match, it means the same LINE account is being used
-	storedFingerprint := storedToken.Fingerprint
-	tokenLineUserID := storedToken.LineUserID
+	// LINE in-app browser shortcut:
+	// If the client provides a LIFF ID token and it verifies to the same LINE user as the token owner,
+	// we can safely skip 2FA (smartphone LINE in-app).
+	lineInAppVerified := false
+	if req.LineIDToken != "" && h.lineService != nil {
+		sub, err := h.lineService.VerifyIDToken(req.LineIDToken)
+		if err != nil {
+			fmt.Printf("LINE ID token verify failed (fallback to 2FA): %v\n", err)
+		} else if sub == storedToken.LineUserID {
+			lineInAppVerified = true
+			fmt.Println("LINE ID token verified for the same user, skipping 2FA")
+		} else {
+			fmt.Printf("LINE ID token sub mismatch (fallback to 2FA): sub=%s expected=%s\n", sub, storedToken.LineUserID)
+		}
+	}
 
-	sameDevice := storedFingerprint != "" && storedFingerprint == tokenLineUserID
-	fmt.Printf("Same device check: %v (stored fingerprint: %s, token LINE User ID: %s)\n",
-		sameDevice, storedFingerprint, tokenLineUserID)
-
-	// If same device (same LINE account), skip 2FA
-	if sameDevice {
-		fmt.Println("Same device detected, skipping 2FA")
+	if lineInAppVerified {
 
 		// Get admin email
 		email, err := h.supabaseService.GetAdminEmail(storedToken.LineUserID)
@@ -123,9 +129,9 @@ func (h *AuthHandler) HandleVerify(request events.APIGatewayV2HTTPRequest) event
 		return result
 	}
 
-	// Different device, require 2FA
+	// Not verified as LINE in-app (likely PC or normal browser): require 2FA
 	if req.TwoFactorCode == "" {
-		fmt.Println("Different device, requiring 2FA")
+		fmt.Println("Requiring 2FA")
 		return utils.BuildAPIGatewayResponse(200, VerifyTokenResponse{
 			Success:           false,
 			RequiresTwoFactor: true,

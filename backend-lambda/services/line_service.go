@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -185,4 +186,59 @@ func (l *LINEService) GetUserProfile(userID string) (*LINEUserProfile, error) {
 	}
 
 	return &profile, nil
+}
+
+type lineIDTokenVerifyResponse struct {
+	Iss string `json:"iss"`
+	Sub string `json:"sub"`
+	Aud string `json:"aud"`
+	Exp int64  `json:"exp"`
+	Iat int64  `json:"iat"`
+}
+
+// VerifyIDToken verifies a LINE Login / LIFF ID token and returns the subject (LINE user id).
+//
+// It calls LINE's "Verify ID token" endpoint. The client id must match the channel used for LIFF.
+// Required env:
+// - LINE_LOGIN_CHANNEL_ID (recommended) or LINE_CHANNEL_ID (fallback)
+func (l *LINEService) VerifyIDToken(idToken string) (string, error) {
+	clientID := os.Getenv("LINE_LOGIN_CHANNEL_ID")
+	if clientID == "" {
+		clientID = os.Getenv("LINE_CHANNEL_ID")
+	}
+	if clientID == "" {
+		return "", fmt.Errorf("LINE_LOGIN_CHANNEL_ID (or LINE_CHANNEL_ID) is not configured")
+	}
+
+	form := url.Values{}
+	form.Set("id_token", idToken)
+	form.Set("client_id", clientID)
+
+	req, err := http.NewRequest("POST", "https://api.line.me/oauth2/v2.1/verify", bytes.NewBufferString(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("failed to create verify request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := l.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to verify id token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("LINE verify returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var parsed lineIDTokenVerifyResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("failed to parse verify response: %w", err)
+	}
+
+	if parsed.Sub == "" {
+		return "", fmt.Errorf("verify response missing sub: %s", string(body))
+	}
+
+	return parsed.Sub, nil
 }

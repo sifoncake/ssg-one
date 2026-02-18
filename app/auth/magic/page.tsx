@@ -18,26 +18,11 @@ function MagicLinkContent() {
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [lineIdToken, setLineIdToken] = useState<string | null>(null);
+  const [liffInitDone, setLiffInitDone] = useState(false);
 
   // Track if verification has been attempted to prevent multiple calls
   const hasVerified = useRef(false);
   const hasInitLiff = useRef(false);
-
-  useEffect(() => {
-    if (!token) {
-      setState('error');
-      setError('Invalid magic link - no token provided');
-      return;
-    }
-
-    // Only verify once on mount
-    if (hasVerified.current) return;
-    hasVerified.current = true;
-
-    // Auto-verify on mount
-    verifyToken();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
 
   useEffect(() => {
     // LIFF is only useful in LINE in-app browser. On PC/regular browsers we simply won't have a token.
@@ -46,13 +31,19 @@ function MagicLinkContent() {
       hasInitLiff.current = true;
 
       const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-      if (!liffId) return;
+      if (!liffId) {
+        setLiffInitDone(true);
+        return;
+      }
 
       try {
         await liff.init({ liffId });
 
         // If we're not inside LINE, don't force login; PC flow should require 2FA anyway.
-        if (!liff.isInClient()) return;
+        if (!liff.isInClient()) {
+          setLiffInitDone(true);
+          return;
+        }
 
         if (!liff.isLoggedIn()) {
           // This will redirect within LINE in-app browser.
@@ -64,11 +55,31 @@ function MagicLinkContent() {
         if (idToken) setLineIdToken(idToken);
       } catch (e) {
         console.warn('LIFF init failed (fallback to 2FA flow):', e);
+      } finally {
+        setLiffInitDone(true);
       }
     };
 
     void init();
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setState('error');
+      setError('Invalid magic link - no token provided');
+      return;
+    }
+
+    // Wait until LIFF init attempt completes so LINE in-app can provide an ID token before first verification.
+    if (!liffInitDone) return;
+
+    // Only verify once
+    if (hasVerified.current) return;
+    hasVerified.current = true;
+
+    void verifyToken();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, liffInitDone]);
 
   const verifyToken = async (code?: string) => {
     try {

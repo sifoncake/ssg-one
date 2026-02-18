@@ -33,7 +33,7 @@ func init() {
 
 	// Initialize handlers
 	adminHandler = handlers.NewAdminHandler(supabaseService)
-	authHandler = handlers.NewAuthHandler(supabaseService)
+	authHandler = handlers.NewAuthHandler(supabaseService, lineService)
 	broadcastHandler = handlers.NewBroadcastHandler(lineService)
 	pushHandler = handlers.NewPushHandler(lineService)
 	webhookHandler = handlers.NewLINEWebhookHandler(

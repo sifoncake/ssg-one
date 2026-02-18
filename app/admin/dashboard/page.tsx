@@ -28,13 +28,13 @@ interface SupabaseStore {
   store_name: string;
 }
 
-interface SupabaseRecentSale {
+type SupabaseRecentSale = {
   id: string;
   date: string;
   amount: number;
-  customers: SupabaseCustomer;
-  stores: SupabaseStore;
-}
+  customers: SupabaseCustomer | SupabaseCustomer[] | null;
+  stores: SupabaseStore | SupabaseStore[] | null;
+};
 
 // Formatted types for component state
 interface StoreStats {
@@ -203,7 +203,7 @@ export default function DashboardPage() {
 
       console.log('Recent sales raw data:', recentSalesData);
 
-      const formattedRecentSales: RecentSale[] = (recentSalesData || []).map((sale: any) => {
+      const formattedRecentSales: RecentSale[] = (recentSalesData || []).map((sale: SupabaseRecentSale) => {
         const customers = Array.isArray(sale.customers) ? sale.customers[0] : sale.customers;
         const stores = Array.isArray(sale.stores) ? sale.stores[0] : sale.stores;
         
