@@ -108,7 +108,7 @@ function MagicLinkContent() {
         throw new Error(data.error || 'Verification failed');
       }
 
-      if (data.requiresTwoFA) {
+      if (data.requiresTwoFactor) {
         setState('requires_2fa');
         setVerifying(false);
         return;
