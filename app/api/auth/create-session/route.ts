@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Supabase URL:', supabaseUrl);
+    console.log('Service key length:', supabaseServiceKey?.length);
+    console.log('Service key prefix:', supabaseServiceKey?.substring(0, 20));
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -29,6 +33,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Get user by email
+    console.log('Calling listUsers...');
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
 
     if (userError) {
