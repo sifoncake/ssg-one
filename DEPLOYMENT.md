@@ -213,8 +213,12 @@ Check your browser console. The API request will go to:
 |----------|----------|-------------|---------|
 | `LINE_CHANNEL_ACCESS_TOKEN` | Yes | LINE Messaging API token | `abc123...` |
 | `NEXT_PUBLIC_API_URL` | No* | Lambda Function URL | `https://xyz.lambda-url.us-east-1.on.aws` |
+| `MAGIC_LINK_BASE_URL` | Yes** | Frontend URL for magic links (Lambda) | `https://your-app.vercel.app` or `your-app.vercel.app` |
+| `VERCEL_URL` | No*** | Alternative to MAGIC_LINK_BASE_URL (e.g. set by Vercel) | `your-app.vercel.app` |
 
-\* Required only when using Lambda backend
+\* Required only when using Lambda backend  
+\** Required for Lambda when using "管理画面" magic link; no hardcoded fallback.  
+\*** Lambda uses MAGIC_LINK_BASE_URL first, then VERCEL_URL. Set one of them.
 
 ## Cost Estimation
 

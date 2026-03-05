@@ -24,8 +24,12 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
+# local env files (never commit secrets; repo is public-ready)
+.env
 .env*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # vercel
 .vercel
@@ -38,3 +42,9 @@ next-env.d.ts
 memo.txt
 config.txt
 .claude/*.local.json
+
+# secrets / credentials (do not commit; repo is public)
+*credentials*.json
+*secrets*.json
+.env.*
+!.env.example

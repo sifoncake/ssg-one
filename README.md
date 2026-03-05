@@ -1,24 +1,23 @@
-# SSG ONE - LINE Messaging Application
+# SSG ONE - Multi-Store Operations Platform
 
-A Next.js 14 application with TypeScript that allows you to broadcast messages to all friends of your LINE bot.
+SSG ONE is a multi-store wellness business management platform with an admin dashboard, LINE messaging operations, and passwordless authentication. The frontend runs on Next.js; the production backend runs on AWS Lambda (Go).
+
+**Repository policy:** This project is maintained for public visibility. Do not commit secrets, API keys, or environment files containing credentials; use `.env.local` (gitignored) and configure Lambda env vars outside the repo.
 
 ## Features
 
-- Simple form interface with text input
-- API route to broadcast messages to LINE Messaging API
-- Sends messages to all friends who have added your LINE bot
-- **Dual deployment modes**: Local development (Next.js API) or AWS Lambda
-- Environment variable configuration for security
-- TypeScript for type safety
-- Tailwind CSS for styling
-- Go-based AWS Lambda backend for production scalability
+- Admin dashboard with multi-store analytics
+- Staff, customer, and sales management pages
+- LINE messaging operations (broadcast and targeted push)
+- Passwordless magic-link authentication with 2FA fallback and device recognition
+- **Dual deployment modes**: Local development (Next.js API routes) or AWS Lambda
 
 ## Prerequisites
 
 ### For Local Development:
 - Node.js 18+ installed
 - A LINE Messaging API account
-- LINE Channel Access Token
+- A Supabase project (URL/keys)
 
 ### For AWS Lambda Deployment (Optional):
 - AWS CLI configured
@@ -34,46 +33,44 @@ A Next.js 14 application with TypeScript that allows you to broadcast messages t
 
 2. **Configure environment variables:**
    - Copy `.env.example` to `.env.local`
-   - Fill in your LINE Channel Access Token:
-     ```
-     LINE_CHANNEL_ACCESS_TOKEN=your_actual_channel_access_token
-     ```
+   - Fill in required values:
+     - `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`
+     - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+     - `SUPABASE_SERVICE_ROLE_KEY`
+     - Optional: `SUPABASE_URL`, `SUPABASE_KEY` (Lambda)
+     - Optional: `NEXT_PUBLIC_API_URL` (Lambda Function URL)
+     - Optional: `NEXT_PUBLIC_LIFF_ID` (if using the LIFF flow)
 
-3. **Get your LINE credentials:**
-   - Go to [LINE Developers Console](https://developers.line.biz/console/)
-   - Create a new channel or use existing one
-   - Get your Channel Access Token from the Messaging API settings
-   - Make sure your bot has friends added to receive broadcast messages
-
-4. **Run the development server:**
+3. **Run the development server:**
    ```bash
    npm run dev
    ```
 
-5. **Open your browser:**
-   - Navigate to [http://localhost:3000](http://localhost:3000)
-   - Enter a message and click "Send Message"
+4. **Open your browser:**
+   - Navigate to [http://localhost:3001](http://localhost:3001)
 
 ## Project Structure
 
 ```
 ssg-one/
-├── app/                        # Next.js frontend
-│   ├── api/
-│   │   └── send-line/
-│   │       └── route.ts        # Next.js API route (local dev)
-│   ├── globals.css             # Global styles
+├── app/                        # Next.js frontend (App Router)
+│   ├── admin/                  # Admin dashboard pages
+│   ├── auth/                   # Magic link flow
+│   ├── api/                    # Local dev API routes
+│   │   ├── auth/
+│   │   │   ├── create-session/route.ts
+│   │   │   └── verify-magic/route.ts
+│   │   └── send-line/route.ts
 │   ├── layout.tsx              # Root layout
-│   └── page.tsx                # Home page with form
+│   └── page.tsx                # Landing/login entry
 ├── backend-lambda/             # AWS Lambda backend (Go)
-│   ├── main.go                 # Lambda handler function
-│   ├── go.mod                  # Go module definition
-│   ├── go.sum                  # Go dependencies
+│   ├── handlers/               # API handlers
+│   ├── services/               # LINE/Supabase/Claude services
+│   ├── main.go                 # Lambda entry
 │   ├── Makefile                # Build commands
 │   ├── deploy.sh               # Deployment script
-│   ├── setup-lambda.sh         # Initial setup script
-│   └── README.md               # Lambda documentation
-├── .env.local                  # Environment variables (not in git)
+│   └── setup-lambda.sh         # Initial setup script
+├── lib/                        # Shared utilities
 ├── .env.example                # Environment variables template
 ├── next.config.js              # Next.js configuration
 ├── postcss.config.js           # PostCSS configuration
@@ -81,49 +78,23 @@ ssg-one/
 └── package.json                # Project dependencies
 ```
 
-## API Endpoint
+## API Endpoints (Local Dev)
 
-### POST /api/send-line
-
-Broadcasts a message to all friends of the LINE bot.
-
-**Request body:**
-```json
-{
-  "message": "Your message here"
-}
-```
-
-**Success response:**
-```json
-{
-  "success": true,
-  "message": "Message sent successfully"
-}
-```
-
-**Error response:**
-```json
-{
-  "error": "Error message here"
-}
-```
+- **POST /api/send-line**: Broadcast a message to LINE
+- **POST /api/auth/create-session**: Generate a magic-link token via Supabase Admin
+- **POST /api/auth/verify-magic**: Proxy magic-link verification to Lambda
 
 ## Deployment Options
 
 ### Option 1: Local Development (Default)
 
-The application uses the Next.js API route by default:
+The application uses Next.js API routes by default:
 
 ```bash
 npm run dev
 ```
 
-Your `.env.local` should have:
-```
-LINE_CHANNEL_ACCESS_TOKEN=your_token
-# NEXT_PUBLIC_API_URL is commented out or not set
-```
+Leave `NEXT_PUBLIC_API_URL` commented out in `.env.local`.
 
 ### Option 2: AWS Lambda Backend
 
@@ -134,17 +105,7 @@ cd backend-lambda
 ./setup-lambda.sh
 ```
 
-Follow the prompts to:
-1. Specify AWS region
-2. Enter function name
-3. Provide IAM role ARN
-4. Enter LINE Channel Access Token
-
-The script will create the Lambda function and provide you with a Function URL.
-
-#### Manual Setup:
-
-See detailed instructions in [`backend-lambda/README.md`](backend-lambda/README.md)
+Follow the prompts to configure AWS and create the function.
 
 #### Switch to Lambda Backend:
 
@@ -167,7 +128,7 @@ cd backend-lambda
 
 #### Switch Back to Local:
 
-Comment out `NEXT_PUBLIC_API_URL` in `.env.local` and restart dev server.
+Comment out `NEXT_PUBLIC_API_URL` in `.env.local` and restart the dev server.
 
 ## Build for Production
 
@@ -186,60 +147,18 @@ make build
 # Creates function.zip ready for deployment
 ```
 
-## Project Architecture
-
-```
-┌─────────────────┐
-│   Next.js App   │
-│   (Frontend)    │
-└────────┬────────┘
-         │
-         │ API Call
-         │
-         ▼
-┌────────────────────────┐
-│  Backend (Choose One)  │
-├────────────────────────┤
-│                        │
-│ 1. Next.js API Route   │ ← Local Development
-│    /app/api/send-line/ │
-│                        │
-│        OR              │
-│                        │
-│ 2. AWS Lambda (Go)     │ ← Production
-│    backend-lambda/     │
-│                        │
-└────────┬───────────────┘
-         │
-         │ HTTPS Request
-         │
-         ▼
-┌────────────────────┐
-│  LINE Messaging    │
-│      API           │
-└────────────────────┘
-```
-
 ## Technologies Used
 
-### Frontend:
-- [Next.js 14](https://nextjs.org/) - React framework with App Router
+- [Next.js 16](https://nextjs.org/) - React framework with App Router
 - [TypeScript](https://www.typescriptlang.org/) - Type safety
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
-
-### Backend (Local):
-- [Next.js API Routes](https://nextjs.org/docs/app/building-your-application/routing/route-handlers) - Built-in API handling
-- [Axios](https://axios-http.com/) - HTTP client for LINE API
-
-### Backend (AWS Lambda):
-- [Go](https://golang.org/) - High-performance compiled language
+- [Supabase](https://supabase.com/) - Database and auth
+- [Go](https://golang.org/) - Lambda backend
 - [AWS Lambda](https://aws.amazon.com/lambda/) - Serverless compute
-- [AWS Lambda Go SDK](https://github.com/aws/aws-lambda-go) - Lambda runtime
-
-### External APIs:
 - [LINE Messaging API](https://developers.line.biz/en/docs/messaging-api/) - Messaging platform
+- [LIFF](https://developers.line.biz/en/docs/liff/) - LINE in-app login
 
-# License
+## License
 
 MIT. See `LICENSE.md`.
 

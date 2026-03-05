@@ -231,19 +231,10 @@ Supabase          - Database hosting (ap-northeast-1)
 
 ---
 
-## Live Demo
-
-**URL:** [https://ssg-one-seven.vercel.app](https://ssg-one-seven.vercel.app)
-
-**Demo Credentials:**
-- Access via LINE Bot or email/password authentication
-- Contact for demo account access
-
----
-
 ## Source Code
 
-**Repository:** Preparing public release (URL to be added)
+**Repository:**
+https://github.com/sifoncake/ssg-one
 
 **Code Highlights:**
 - `/app` - Next.js 16 frontend with App Router
@@ -259,16 +250,6 @@ Supabase          - Database hosting (ap-northeast-1)
 |-------|----------|
 | Phase 2 | Appointment scheduling, inventory management, meeting transcription |
 | Phase 3 | Customer booking portal, payment integration, loyalty program |
-
----
-
-## Contact
-
-For technical discussions, code review requests, or demo access:
-
-**GitHub:** [Your GitHub Profile]
-**LinkedIn:** [Your LinkedIn Profile]
-**Email:** [Your Email]
 
 ---
 

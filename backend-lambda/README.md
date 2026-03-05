@@ -50,7 +50,7 @@ aws lambda create-function \
   --architectures x86_64 \
   --zip-file fileb://function.zip \
   --role arn:aws:iam::YOUR_ACCOUNT_ID:role/YOUR_LAMBDA_ROLE \
-  --environment Variables="{LINE_CHANNEL_ACCESS_TOKEN=YOUR_TOKEN}" \
+  --environment Variables="{LINE_CHANNEL_ACCESS_TOKEN=YOUR_TOKEN,MAGIC_LINK_BASE_URL=https://your-app.vercel.app}" \
   --timeout 30 \
   --memory-size 256
 ```
@@ -90,10 +90,12 @@ aws lambda update-function-code \
 
 ### 5. Update Environment Variables
 
+Set `MAGIC_LINK_BASE_URL` (or `VERCEL_URL`) to your frontend URL so the "管理画面" magic link points to the correct app. No default is hardcoded.
+
 ```bash
 aws lambda update-function-configuration \
   --function-name ssg-one-line-broadcaster \
-  --environment Variables="{LINE_CHANNEL_ACCESS_TOKEN=YOUR_NEW_TOKEN}"
+  --environment Variables="{LINE_CHANNEL_ACCESS_TOKEN=YOUR_NEW_TOKEN,MAGIC_LINK_BASE_URL=https://your-app.vercel.app}"
 ```
 
 ## Alternative: Deploy with AWS SAM

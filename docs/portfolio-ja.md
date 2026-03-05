@@ -231,22 +231,14 @@ Supabase          - データベースホスティング（ap-northeast-1）
 
 ---
 
-## ライブデモ
-
-**URL:** [https://ssg-one-seven.vercel.app](https://ssg-one-seven.vercel.app)
-
-**デモアカウント:**
-- LINE Botまたはメール/パスワード認証でアクセス
-- デモアカウントが必要な場合はお問い合わせください
-
----
-
 ## ソースコード
 
-**リポジトリ:** 公開準備中（URL追記予定）
+**リポジトリ:**
+https://github.com/sifoncake/ssg-one
+
 
 **コードハイライト:**
-- `/app` - App Router搭載Next.js 14フロントエンド
+- `/app` - App Router搭載Next.js 16フロントエンド
 - `/backend-lambda` - Goベースのサーバーレス関数
 - `/lib` - 共通ユーティリティと認証コンテキスト
 - `/scripts` - データベーススキーマとシードデータ
@@ -259,16 +251,6 @@ Supabase          - データベースホスティング（ap-northeast-1）
 |----------|------|
 | Phase 2 | 予約スケジューリング、在庫管理、ミーティング文字起こし |
 | Phase 3 | 顧客予約ポータル、決済連携、ロイヤルティプログラム |
-
----
-
-## 連絡先
-
-技術的な議論、コードレビュー依頼、デモアクセスについて:
-
-**GitHub:** [GitHubプロフィール]
-**LinkedIn:** [LinkedInプロフィール]
-**Email:** [メールアドレス]
 
 ---
 

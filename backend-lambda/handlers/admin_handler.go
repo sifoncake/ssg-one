@@ -42,10 +42,17 @@ func (h *AdminHandler) HandleAdminRequest(userID string) string {
 		return "マジックリンクの生成に失敗しました。"
 	}
 
-	// Get base URL from environment
-	baseURL := os.Getenv("VERCEL_URL")
+	// Base URL for magic link (no hardcoded fallback; set MAGIC_LINK_BASE_URL or VERCEL_URL in Lambda env)
+	baseURL := os.Getenv("MAGIC_LINK_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://ssg-one-seven.vercel.app"
+		baseURL = os.Getenv("VERCEL_URL")
+	}
+	if baseURL == "" {
+		fmt.Println("MAGIC_LINK_BASE_URL and VERCEL_URL are unset; cannot build magic link")
+		return "マジックリンクの生成に失敗しました。（管理者向け: MAGIC_LINK_BASE_URL を設定してください）"
+	}
+	if len(baseURL) > 0 && baseURL[0] != 'h' {
+		baseURL = "https://" + baseURL
 	}
 
 	// Create response message
