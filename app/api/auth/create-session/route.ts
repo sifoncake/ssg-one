@@ -21,10 +21,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Supabase URL:', supabaseUrl);
-    console.log('Service key length:', supabaseServiceKey?.length);
-    console.log('Service key prefix:', supabaseServiceKey?.substring(0, 20));
-
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
@@ -32,29 +28,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Get user by email
-    console.log('Calling listUsers...');
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
-
-    if (userError) {
-      console.error('Error listing users:', userError);
-      return NextResponse.json(
-        { error: 'Failed to find user' },
-        { status: 500 }
-      );
-    }
-
-    const user = userData.users.find((u) => u.email === email);
-
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found. Please ensure the admin has a Supabase Auth account.' },
-        { status: 404 }
-      );
-    }
-
     // Generate a magic link using admin privileges
     // This creates a hashed token that can be verified without sending an email
+    // If the user doesn't exist, generateLink will return an error
+    console.log('Generating magic link for:', email);
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: email,
