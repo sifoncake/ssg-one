@@ -65,14 +65,14 @@ function MagicLinkContent() {
   }, []);
 
   useEffect(() => {
+    // Wait until LIFF init attempt completes before any checks
+    if (!liffInitDone) return;
+
     if (!token) {
       setState('error');
       setError('Invalid magic link - no token provided');
       return;
     }
-
-    // Wait until LIFF init attempt completes so LINE in-app can provide an ID token before first verification.
-    if (!liffInitDone) return;
 
     // Only verify once
     if (hasVerified.current) return;
