@@ -47,15 +47,16 @@ function MagicLinkContent() {
 
         if (!liff.isLoggedIn()) {
           // This will redirect within LINE in-app browser.
+          // Don't set liffInitDone here - we're about to redirect
           liff.login({ redirectUri: window.location.href });
           return;
         }
 
         const idToken = liff.getIDToken();
         if (idToken) setLineIdToken(idToken);
+        setLiffInitDone(true);
       } catch (e) {
         console.warn('LIFF init failed (fallback to 2FA flow):', e);
-      } finally {
         setLiffInitDone(true);
       }
     };

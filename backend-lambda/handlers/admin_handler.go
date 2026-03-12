@@ -42,30 +42,24 @@ func (h *AdminHandler) HandleAdminRequest(userID string) string {
 		return "マジックリンクの生成に失敗しました。"
 	}
 
-	// Base URL for magic link (no hardcoded fallback; set MAGIC_LINK_BASE_URL or VERCEL_URL in Lambda env)
-	baseURL := os.Getenv("MAGIC_LINK_BASE_URL")
-	if baseURL == "" {
-		baseURL = os.Getenv("VERCEL_URL")
-	}
-	if baseURL == "" {
-		fmt.Println("MAGIC_LINK_BASE_URL and VERCEL_URL are unset; cannot build magic link")
-		return "マジックリンクの生成に失敗しました。（管理者向け: MAGIC_LINK_BASE_URL を設定してください）"
-	}
-	if len(baseURL) > 0 && baseURL[0] != 'h' {
-		baseURL = "https://" + baseURL
+	// LIFF URL for magic link (opens in LINE app with LIFF context)
+	liffID := os.Getenv("LIFF_ID")
+	if liffID == "" {
+		fmt.Println("LIFF_ID is unset; cannot build magic link")
+		return "マジックリンクの生成に失敗しました。（管理者向け: LIFF_ID を設定してください）"
 	}
 
-	// Create response message
+	// Create response message with LIFF URL
 	replyMessage := fmt.Sprintf(`🔐 管理画面アクセス
 
 このリンクからアクセスできます：
-%s/auth/magic?token=%s
+https://liff.line.me/%s?token=%s
 
 ⏰ 有効期限：10分
 🔢 2段階認証コード：%s
 
 ✅ このLINEアプリからタップ → 自動ログイン
-⚠️ 別のデバイスから開く → コード入力が必要`, baseURL, token, twoFactorCode)
+⚠️ 別のデバイスから開く → コード入力が必要`, liffID, token, twoFactorCode)
 
 	return replyMessage
 }
