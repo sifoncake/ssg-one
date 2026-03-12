@@ -19,6 +19,7 @@ function MagicLinkContent() {
   const [verifying, setVerifying] = useState(false);
   const [lineIdToken, setLineIdToken] = useState<string | null>(null);
   const [liffInitDone, setLiffInitDone] = useState(false);
+  const [canShowError, setCanShowError] = useState(false);
 
   // Track if verification has been attempted to prevent multiple calls
   const hasVerified = useRef(false);
@@ -69,6 +70,7 @@ function MagicLinkContent() {
     if (!liffInitDone) return;
 
     if (!token) {
+      setCanShowError(true);
       setState('error');
       setError('Invalid magic link - no token provided');
       return;
@@ -158,6 +160,7 @@ function MagicLinkContent() {
       }
     } catch (err) {
       console.error('Verification error:', err);
+      setCanShowError(true);
       setState('error');
       setError(err instanceof Error ? err.message : 'Verification failed');
       setVerifying(false);
@@ -182,7 +185,7 @@ function MagicLinkContent() {
             🔐 管理画面アクセス
           </h1>
 
-          {state === 'loading' && (
+          {(state === 'loading' || (state === 'error' && !canShowError)) && (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
               <p className="text-gray-600">認証中...</p>
@@ -237,7 +240,7 @@ function MagicLinkContent() {
             </div>
           )}
 
-          {state === 'error' && (
+          {state === 'error' && canShowError && (
             <div className="text-center py-8">
               <div className="text-6xl mb-4">✗</div>
               <p className="text-red-800 font-medium mb-4">認証エラー</p>
