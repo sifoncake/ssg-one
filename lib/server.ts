@@ -82,11 +82,15 @@ export async function getUserPermissions(lineUserId: string): Promise<UserPermis
   result.isAdmin = !!adminData;
 
   // Get staff info
-  const { data: staffData } = await supabase
+  const { data: staffData, error: staffError } = await supabase
     .from('staff')
     .select('id')
     .eq('line_user_id', lineUserId)
     .single();
+
+  console.log('getUserPermissions - staff lookup for:', lineUserId);
+  console.log('getUserPermissions - staffData:', staffData);
+  console.log('getUserPermissions - staffError:', staffError);
 
   if (staffData) {
     result.staffId = staffData.id;

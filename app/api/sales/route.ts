@@ -108,8 +108,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    console.log('Sales API - LINE user ID:', lineUserId);
+
     // Check permission
     const userPermissions = await getUserPermissions(lineUserId);
+    console.log('Sales API - User permissions:', JSON.stringify(userPermissions, null, 2));
+
     if (!userPermissions.permissions.includes('payment')) {
       return NextResponse.json({ error: 'No permission for payment' }, { status: 403 });
     }
