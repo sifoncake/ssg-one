@@ -37,7 +37,7 @@ const allMenuItems: MenuItem[] = [
     label: '管理画面',
     icon: '🔐',
     description: 'ダッシュボード',
-    href: '/admin',
+    href: '/users',
     permission: 'admin',
     comingSoon: false,
   },
