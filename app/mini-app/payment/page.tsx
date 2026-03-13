@@ -8,16 +8,25 @@ type Store = {
   store_name: string;
 };
 
+type CartItem = {
+  id: string;
+  itemName: string;
+  itemType: '施術' | '物販' | '回数券';
+  quantity: number;
+  unitPrice: number;
+  taxRate: 10 | 8;
+};
+
 const ITEM_TYPES = ['施術', '物販', '回数券'] as const;
 const PAYMENT_METHODS = ['現金', 'カード', 'QRコード', '回数券'] as const;
 
 // Preset items for quick selection
 const PRESET_ITEMS = [
-  { name: '60分コース', type: '施術', price: 6000 },
-  { name: '90分コース', type: '施術', price: 8500 },
-  { name: '120分コース', type: '施術', price: 11000 },
-  { name: 'オイル', type: '物販', price: 3000 },
-  { name: '回数券5回', type: '回数券', price: 27500 },
+  { name: '60分コース', type: '施術' as const, price: 6000, taxRate: 10 as const },
+  { name: '90分コース', type: '施術' as const, price: 8500, taxRate: 10 as const },
+  { name: '120分コース', type: '施術' as const, price: 11000, taxRate: 10 as const },
+  { name: 'オイル', type: '物販' as const, price: 3000, taxRate: 10 as const },
+  { name: '回数券5回', type: '回数券' as const, price: 27500, taxRate: 10 as const },
 ];
 
 export default function PaymentPage() {
@@ -25,9 +34,18 @@ export default function PaymentPage() {
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStore, setSelectedStore] = useState<string>('');
+
+  // Cart
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Item input
   const [itemName, setItemName] = useState('');
   const [itemType, setItemType] = useState<typeof ITEM_TYPES[number]>('施術');
   const [unitPrice, setUnitPrice] = useState<number>(0);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [taxRate, setTaxRate] = useState<10 | 8>(10);
+
+  // Payment
   const [paymentMethod, setPaymentMethod] = useState<typeof PAYMENT_METHODS[number]>('現金');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -50,7 +68,6 @@ export default function PaymentPage() {
           return;
         }
 
-        // Fetch stores
         const idToken = liff.getIDToken();
         const storesResponse = await fetch('/api/stores', {
           headers: { 'x-line-id-token': idToken || '' },
@@ -64,7 +81,6 @@ export default function PaymentPage() {
           }
         }
 
-        // Fetch today's summary
         await fetchTodaySummary(idToken);
       } catch (e) {
         console.error('Init error:', e);
@@ -97,13 +113,45 @@ export default function PaymentPage() {
 
   const handlePresetSelect = (preset: typeof PRESET_ITEMS[number]) => {
     setItemName(preset.name);
-    setItemType(preset.type as typeof ITEM_TYPES[number]);
+    setItemType(preset.type);
     setUnitPrice(preset.price);
+    setTaxRate(preset.taxRate);
+    setQuantity(1);
+  };
+
+  const handleAddToCart = () => {
+    if (!itemName || unitPrice <= 0) {
+      setError('商品名と金額を入力してください');
+      return;
+    }
+
+    const newItem: CartItem = {
+      id: Date.now().toString(),
+      itemName,
+      itemType,
+      quantity,
+      unitPrice,
+      taxRate,
+    };
+
+    setCart([...cart, newItem]);
+    setItemName('');
+    setUnitPrice(0);
+    setQuantity(1);
+    setError(null);
+  };
+
+  const handleRemoveFromCart = (id: string) => {
+    setCart(cart.filter(item => item.id !== id));
+  };
+
+  const getCartTotal = () => {
+    return cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   };
 
   const handleSubmit = async () => {
-    if (!selectedStore || !itemName || unitPrice <= 0) {
-      setError('必須項目を入力してください');
+    if (!selectedStore || cart.length === 0) {
+      setError('商品をカートに追加してください');
       return;
     }
 
@@ -120,11 +168,14 @@ export default function PaymentPage() {
         body: JSON.stringify({
           lineIdToken: idToken,
           storeId: selectedStore,
-          itemName,
-          itemType,
-          quantity: 1,
-          unitPrice,
           paymentMethod,
+          items: cart.map(item => ({
+            itemName: item.itemName,
+            itemType: item.itemType,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            taxRate: item.taxRate,
+          })),
         }),
       });
 
@@ -135,13 +186,8 @@ export default function PaymentPage() {
         return;
       }
 
-      setSuccessMessage(`¥${unitPrice.toLocaleString()} の売上を登録しました`);
-
-      // Reset form
-      setItemName('');
-      setUnitPrice(0);
-
-      // Refresh summary
+      setSuccessMessage(`¥${getCartTotal().toLocaleString()} の売上を登録しました`);
+      setCart([]);
       await fetchTodaySummary(idToken);
 
     } catch (e) {
@@ -167,8 +213,8 @@ export default function PaymentPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
+    <main className="min-h-screen bg-gray-50 pb-32">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 py-3 flex items-center">
           <button onClick={handleBack} className="mr-3 text-gray-600">
             ← 戻る
@@ -189,14 +235,12 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* Success Message */}
+        {/* Messages */}
         {successMessage && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <p className="text-green-800">{successMessage}</p>
           </div>
         )}
-
-        {/* Error Message */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800">{error}</p>
@@ -218,6 +262,40 @@ export default function PaymentPage() {
             ))}
           </select>
         </div>
+
+        {/* Cart */}
+        {cart.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              カート（{cart.length}点）
+            </label>
+            <div className="space-y-2">
+              {cart.map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{item.itemName}</p>
+                    <p className="text-xs text-gray-500">
+                      {item.itemType} / {item.taxRate}% / ×{item.quantity}
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 mr-2">
+                    ¥{(item.unitPrice * item.quantity).toLocaleString()}
+                  </p>
+                  <button
+                    onClick={() => handleRemoveFromCart(item.id)}
+                    className="text-red-500 text-sm"
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+              <div className="pt-2 border-t flex justify-between">
+                <span className="font-medium">合計</span>
+                <span className="font-bold text-lg">¥{getCartTotal().toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Preset Items */}
         <div className="bg-white rounded-lg shadow-sm p-4">
@@ -272,50 +350,107 @@ export default function PaymentPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">金額</label>
-            <input
-              type="number"
-              value={unitPrice || ''}
-              onChange={(e) => setUnitPrice(Number(e.target.value))}
-              className="w-full border rounded-lg p-3 text-gray-900 text-xl"
-              placeholder="0"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">支払方法</label>
-            <div className="grid grid-cols-2 gap-2">
-              {PAYMENT_METHODS.map((method) => (
-                <button
-                  key={method}
-                  onClick={() => setPaymentMethod(method)}
-                  className={`py-2 rounded-lg border ${
-                    paymentMethod === method
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-700'
-                  }`}
-                >
-                  {method}
-                </button>
-              ))}
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">金額</label>
+              <input
+                type="number"
+                value={unitPrice || ''}
+                onChange={(e) => setUnitPrice(Number(e.target.value))}
+                className="w-full border rounded-lg p-3 text-gray-900"
+                placeholder="0"
+              />
+            </div>
+            <div className="w-20">
+              <label className="block text-sm font-medium text-gray-700 mb-2">数量</label>
+              <input
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                className="w-full border rounded-lg p-3 text-gray-900 text-center"
+                min="1"
+              />
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">税率</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTaxRate(10)}
+                className={`flex-1 py-2 rounded-lg border ${
+                  taxRate === 10
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 text-gray-700'
+                }`}
+              >
+                10%（標準）
+              </button>
+              <button
+                onClick={() => setTaxRate(8)}
+                className={`flex-1 py-2 rounded-lg border ${
+                  taxRate === 8
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 text-gray-700'
+                }`}
+              >
+                8%（軽減）
+              </button>
+            </div>
+          </div>
+
+          <button
+            onClick={handleAddToCart}
+            disabled={!itemName || unitPrice <= 0}
+            className={`w-full py-3 rounded-lg font-medium ${
+              !itemName || unitPrice <= 0
+                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                : 'bg-gray-800 text-white active:bg-gray-900'
+            }`}
+          >
+            カートに追加
+          </button>
         </div>
 
-        {/* Submit Button */}
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting || !itemName || unitPrice <= 0}
-          className={`w-full py-4 rounded-lg text-white font-bold text-lg ${
-            isSubmitting || !itemName || unitPrice <= 0
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 active:bg-blue-700'
-          }`}
-        >
-          {isSubmitting ? '登録中...' : `¥${unitPrice.toLocaleString()} を登録`}
-        </button>
+        {/* Payment Method */}
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">支払方法</label>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHODS.map((method) => (
+              <button
+                key={method}
+                onClick={() => setPaymentMethod(method)}
+                className={`py-2 rounded-lg border ${
+                  paymentMethod === method
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 text-gray-700'
+                }`}
+              >
+                {method}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Fixed Submit Button */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
+          <div className="max-w-md mx-auto">
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className={`w-full py-4 rounded-lg text-white font-bold text-lg ${
+                isSubmitting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 active:bg-blue-700'
+              }`}
+            >
+              {isSubmitting ? '登録中...' : `¥${getCartTotal().toLocaleString()} を登録`}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
