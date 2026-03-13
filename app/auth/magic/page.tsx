@@ -187,7 +187,8 @@ function MagicLinkContent() {
 
           {(state === 'loading' || (state === 'error' && !canShowError)) && (
             <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+              <img src="/logo.svg" alt="SSG ONE" className="h-16 mx-auto mb-6" />
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
               <p className="text-gray-600">認証中...</p>
             </div>
           )}
@@ -280,7 +281,8 @@ export default function MagicLinkPage() {
                 🔐 管理画面アクセス
               </h1>
               <div className="text-center py-8">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <img src="/logo.svg" alt="SSG ONE" className="h-16 mx-auto mb-6" />
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
                 <p className="text-gray-600">読み込み中...</p>
               </div>
             </div>
