@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import AdminLayout from '@/app/components/AdminLayout';
 import { supabase } from '@/lib/supabase';
 
@@ -56,6 +57,7 @@ const ROLE_DISPLAY: Record<string, { ja: string; color: string; level: number }>
 };
 
 export default function StaffPage() {
+  const router = useRouter();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,7 +195,8 @@ export default function StaffPage() {
             {staff.map((member) => (
               <div
                 key={member.id}
-                className="bg-white rounded-lg shadow hover:shadow-md transition p-6"
+                onClick={() => router.push(`/admin/staff/${member.id}`)}
+                className="bg-white rounded-lg shadow hover:shadow-md transition p-6 cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">

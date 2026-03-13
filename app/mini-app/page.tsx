@@ -8,12 +8,21 @@ type MenuItem = {
   label: string;
   icon: string;
   description: string;
-  href: string;
+  href?: string;
   permission?: string;
   comingSoon?: boolean;
+  action?: 'admin';
 };
 
 const allMenuItems: MenuItem[] = [
+  {
+    id: 'attendance',
+    label: '出退勤',
+    icon: '🕐',
+    description: '出勤・退勤打刻',
+    href: '/mini-app/attendance',
+    comingSoon: false,
+  },
   {
     id: 'payment',
     label: '決済',
@@ -21,7 +30,7 @@ const allMenuItems: MenuItem[] = [
     description: '売上登録・取り消し',
     href: '/mini-app/payment',
     permission: 'payment',
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     id: 'report',
@@ -37,9 +46,9 @@ const allMenuItems: MenuItem[] = [
     label: '管理画面',
     icon: '🔐',
     description: 'ダッシュボード',
-    href: '/users',
     permission: 'admin',
     comingSoon: false,
+    action: 'admin',
   },
 ];
 
@@ -49,6 +58,7 @@ export default function MiniAppPage() {
   const [error, setError] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
     const initLiff = async () => {
@@ -96,12 +106,56 @@ export default function MiniAppPage() {
     initLiff();
   }, []);
 
-  if (isLoading) {
+  const handleAdminClick = async () => {
+    setNavigating(true);
+    try {
+      const idToken = liff.getIDToken();
+      if (!idToken) {
+        setError('LINEトークンを取得できませんでした');
+        setNavigating(false);
+        return;
+      }
+
+      const response = await fetch('/api/auth/generate-magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineIdToken: idToken }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.error || '管理画面へのアクセスに失敗しました');
+        setNavigating(false);
+        return;
+      }
+
+      // Redirect to magic link auth page
+      window.location.href = `/auth/magic?token=${data.token}`;
+    } catch (e) {
+      console.error('Admin navigation error:', e);
+      setError('エラーが発生しました');
+      setNavigating(false);
+    }
+  };
+
+  const handleMenuClick = (item: MenuItem) => {
+    if (item.comingSoon) return;
+
+    if (item.action === 'admin') {
+      handleAdminClick();
+    } else if (item.href) {
+      window.location.href = item.href;
+    }
+  };
+
+  if (isLoading || navigating) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <img src="/logo.svg" alt="SSG ONE" className="h-16 mx-auto mb-4" />
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          {navigating && <p className="text-gray-600 mt-4">管理画面に移動中...</p>}
         </div>
       </main>
     );
@@ -141,11 +195,7 @@ export default function MiniAppPage() {
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => {
-                if (!item.comingSoon) {
-                  window.location.href = item.href;
-                }
-              }}
+              onClick={() => handleMenuClick(item)}
               disabled={item.comingSoon}
               className={`w-full bg-white rounded-lg shadow-sm p-4 flex items-center text-left transition ${
                 item.comingSoon
