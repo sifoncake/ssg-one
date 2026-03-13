@@ -17,29 +17,38 @@ interface SupabaseStaff {
   name: string;
 }
 
-interface SupabaseSale {
-  id: string;
-  date: string;
+interface SupabaseSaleItem {
   item_name: string;
   item_type: string;
+  quantity: number;
   amount: number;
+}
+
+interface SupabaseSale {
+  id: string;
+  sale_code: string;
+  date: string;
+  total_amount: number;
   payment_method: string;
-  stores: SupabaseStore[];
-  customers: SupabaseCustomer[];
-  staff: SupabaseStaff[];
+  status: string;
+  stores: SupabaseStore | SupabaseStore[] | null;
+  customers: SupabaseCustomer | SupabaseCustomer[] | null;
+  staff: SupabaseStaff | SupabaseStaff[] | null;
+  sale_items: SupabaseSaleItem[];
 }
 
 // Formatted types for component state
 interface Sale {
   id: string;
+  sale_code: string;
   date: string;
   store_name: string;
   customer_name: string;
   staff_name: string;
-  item_name: string;
-  item_type: string;
+  item_summary: string;
   amount: number;
   payment_method: string;
+  status: string;
 }
 
 interface MonthlyStats {
@@ -64,7 +73,6 @@ export default function SalesPage() {
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    itemType: '',
     storeId: '',
   });
 
@@ -89,36 +97,49 @@ export default function SalesPage() {
       if (storesError) throw storesError;
       setStores(storesData || []);
 
-      // Fetch sales with store, customer, and staff names
+      // Fetch sales with store, customer, staff names, and items
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select(`
           id,
+          sale_code,
           date,
-          item_name,
-          item_type,
-          amount,
+          total_amount,
           payment_method,
+          status,
           stores!store_id(store_name),
           customers!customer_id(name),
-          staff!staff_id(name)
+          staff!staff_id(name),
+          sale_items(item_name, item_type, quantity, amount)
         `)
         .order('date', { ascending: false });
 
       if (salesError) throw salesError;
 
       const typedSales = salesData as SupabaseSale[];
-      const formattedSales: Sale[] = typedSales.map((sale) => ({
-        id: sale.id,
-        date: sale.date,
-        store_name: sale.stores?.[0]?.store_name || '不明',
-        customer_name: sale.customers?.[0]?.name || '不明',
-        staff_name: sale.staff?.[0]?.name || '不明',
-        item_name: sale.item_name,
-        item_type: sale.item_type,
-        amount: sale.amount,
-        payment_method: sale.payment_method,
-      }));
+      const formattedSales: Sale[] = typedSales.map((sale) => {
+        const stores = Array.isArray(sale.stores) ? sale.stores[0] : sale.stores;
+        const customers = Array.isArray(sale.customers) ? sale.customers[0] : sale.customers;
+        const staff = Array.isArray(sale.staff) ? sale.staff[0] : sale.staff;
+
+        // Create item summary (e.g., "60分コース x2, オイル x1")
+        const itemSummary = sale.sale_items
+          ?.map(item => item.quantity > 1 ? `${item.item_name} x${item.quantity}` : item.item_name)
+          .join(', ') || '-';
+
+        return {
+          id: sale.id,
+          sale_code: sale.sale_code,
+          date: sale.date,
+          store_name: stores?.store_name || '不明',
+          customer_name: customers?.name || 'ゲスト',
+          staff_name: staff?.name || '不明',
+          item_summary: itemSummary,
+          amount: sale.total_amount,
+          payment_method: sale.payment_method,
+          status: sale.status,
+        };
+      });
 
       setSales(formattedSales);
 
@@ -158,10 +179,6 @@ export default function SalesPage() {
 
     if (filters.endDate) {
       filtered = filtered.filter((sale) => sale.date <= filters.endDate);
-    }
-
-    if (filters.itemType) {
-      filtered = filtered.filter((sale) => sale.item_type === filters.itemType);
     }
 
     if (filters.storeId) {
@@ -287,7 +304,7 @@ export default function SalesPage() {
         {/* Filters */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">フィルター</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 店舗
@@ -327,21 +344,6 @@ export default function SalesPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                種別
-              </label>
-              <select
-                value={filters.itemType}
-                onChange={(e) => setFilters({ ...filters, itemType: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              >
-                <option value="">すべて</option>
-                <option value="施術">施術</option>
-                <option value="物販">物販</option>
-                <option value="回数券">回数券</option>
-              </select>
-            </div>
           </div>
         </div>
 
@@ -364,13 +366,13 @@ export default function SalesPage() {
                     担当
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    商品名
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    種別
+                    商品
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     支払方法
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    状態
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     金額
@@ -399,24 +401,24 @@ export default function SalesPage() {
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                         {sale.staff_name}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {sale.item_name}
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
+                        {sale.item_summary}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {sale.payment_method}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
                         <span
                           className={`px-2 py-1 text-xs font-medium rounded ${
-                            sale.item_type === '施術'
-                              ? 'bg-blue-100 text-blue-800'
-                              : sale.item_type === '物販'
+                            sale.status === 'completed'
                               ? 'bg-green-100 text-green-800'
-                              : 'bg-purple-100 text-purple-800'
+                              : sale.status === 'voided'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
                           }`}
                         >
-                          {sale.item_type}
+                          {sale.status === 'completed' ? '完了' : sale.status === 'voided' ? '取消' : '返金'}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                        {sale.payment_method}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900">
                         {formatCurrency(sale.amount)}

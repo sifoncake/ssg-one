@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 // Raw Supabase response types
 interface SupabaseSalesAmount {
-  amount: number;
+  total_amount: number;
 }
 
 interface SupabaseStoreData {
@@ -17,7 +17,7 @@ interface SupabaseStoreData {
 
 interface SupabaseMonthlySale {
   store_id: string;
-  amount: number;
+  total_amount: number;
 }
 
 interface SupabaseCustomer {
@@ -31,7 +31,7 @@ interface SupabaseStore {
 type SupabaseRecentSale = {
   id: string;
   date: string;
-  amount: number;
+  total_amount: number;
   customers: SupabaseCustomer | SupabaseCustomer[] | null;
   stores: SupabaseStore | SupabaseStore[] | null;
 };
@@ -127,12 +127,12 @@ export default function DashboardPage() {
       // Get total sales and revenue (all time)
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('amount');
+        .select('total_amount');
 
       if (salesError) throw salesError;
 
       const typedSalesData = salesData as SupabaseSalesAmount[];
-      const totalRevenue = typedSalesData.reduce((sum, sale) => sum + sale.amount, 0);
+      const totalRevenue = typedSalesData.reduce((sum, sale) => sum + sale.total_amount, 0);
 
       // Get selected month store performance
       const [year, month] = selectedMonth.split('-').map(Number);
@@ -152,7 +152,7 @@ export default function DashboardPage() {
       // Get selected month sales by store
       const { data: monthlySalesData, error: monthlySalesError } = await supabase
         .from('sales')
-        .select('store_id, amount')
+        .select('store_id, total_amount')
         .gte('date', `${selectedMonth}-01`)
         .lte('date', `${selectedMonth}-${lastDay.toString().padStart(2, '0')}`);
 
@@ -174,7 +174,7 @@ export default function DashboardPage() {
 
       const storePerformance: StoreStats[] = typedStores.map((store) => {
         const storeSales = typedMonthlySales.filter((s) => s.store_id === store.id);
-        const revenue = storeSales.reduce((sum, s) => sum + (s.amount || 0), 0);
+        const revenue = storeSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
         const percentage = store.monthly_target > 0 ? (revenue / store.monthly_target) * 100 : 0;
 
         return {
@@ -192,7 +192,7 @@ export default function DashboardPage() {
         .select(`
           id,
           date,
-          amount,
+          total_amount,
           customers!customer_id(name),
           stores!store_id(store_name)
         `)
@@ -206,13 +206,13 @@ export default function DashboardPage() {
       const formattedRecentSales: RecentSale[] = (recentSalesData || []).map((sale: SupabaseRecentSale) => {
         const customers = Array.isArray(sale.customers) ? sale.customers[0] : sale.customers;
         const stores = Array.isArray(sale.stores) ? sale.stores[0] : sale.stores;
-        
+
         return {
           id: sale.id,
           date: sale.date,
           customer_name: customers?.name || '不明',
           store_name: stores?.store_name || '不明',
-          amount: sale.amount,
+          amount: sale.total_amount,
         };
       });
 
