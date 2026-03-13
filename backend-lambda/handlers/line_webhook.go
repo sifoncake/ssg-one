@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -65,10 +66,16 @@ func (h *LINEWebhookHandler) Handle(request events.APIGatewayV2HTTPRequest) even
 
 		// Route message to appropriate handler
 		var replyMessage string
-		if strings.TrimSpace(userMessage) == "管理画面" {
+		trimmedMessage := strings.TrimSpace(userMessage)
+
+		switch trimmedMessage {
+		case "管理画面":
 			// Check if user is admin and handle magic link generation
 			replyMessage = h.adminHandler.HandleAdminRequest(userID)
-		} else {
+		case "メニュー":
+			// Return mini-app menu
+			replyMessage = h.handleMenuCommand(userID)
+		default:
 			// Handle regular message with Claude AI
 			replyMessage = h.handleClaudeMessage(userMessage)
 		}
@@ -107,6 +114,21 @@ func (h *LINEWebhookHandler) ensureUserExists(userID string) error {
 	}
 
 	return nil
+}
+
+// handleMenuCommand returns the mini-app URL
+func (h *LINEWebhookHandler) handleMenuCommand(userID string) string {
+	liffID := os.Getenv("MINI_APP_LIFF_ID")
+	if liffID == "" {
+		return "メニューは現在準備中です。"
+	}
+
+	liffURL := fmt.Sprintf("https://liff.line.me/%s", liffID)
+
+	return fmt.Sprintf(`📱 SSG ONE メニュー
+
+以下のリンクからアクセスしてください：
+%s`, liffURL)
 }
 
 // handleClaudeMessage processes regular messages using Claude AI

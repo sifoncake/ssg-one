@@ -9,17 +9,19 @@ type MenuItem = {
   icon: string;
   description: string;
   href: string;
-  disabled?: boolean;
+  permission?: string;
+  comingSoon?: boolean;
 };
 
-const menuItems: MenuItem[] = [
+const allMenuItems: MenuItem[] = [
   {
     id: 'payment',
     label: '決済',
     icon: '💰',
     description: '売上登録・取り消し',
     href: '/mini-app/payment',
-    disabled: true,
+    permission: 'payment',
+    comingSoon: true,
   },
   {
     id: 'report',
@@ -27,7 +29,8 @@ const menuItems: MenuItem[] = [
     icon: '📝',
     description: '日次報告の入力',
     href: '/mini-app/report',
-    disabled: true,
+    permission: 'report',
+    comingSoon: true,
   },
   {
     id: 'admin',
@@ -35,7 +38,8 @@ const menuItems: MenuItem[] = [
     icon: '🔐',
     description: 'ダッシュボード',
     href: '/admin',
-    disabled: true,
+    permission: 'admin',
+    comingSoon: false,
   },
 ];
 
@@ -43,6 +47,8 @@ export default function MiniAppPage() {
   const [userName, setUserName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
   useEffect(() => {
     const initLiff = async () => {
@@ -63,6 +69,22 @@ export default function MiniAppPage() {
 
         const profile = await liff.getProfile();
         setUserName(profile.displayName);
+
+        // Get user permissions
+        const response = await fetch(`/api/user/role?lineUserId=${profile.userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setPermissions(data.permissions || []);
+
+          // Filter menu items based on permissions
+          const visibleItems = allMenuItems.filter(
+            item => !item.permission || data.permissions?.includes(item.permission)
+          );
+          setMenuItems(visibleItems);
+        } else {
+          // If API fails, show no permission-required items
+          setMenuItems(allMenuItems.filter(item => !item.permission));
+        }
       } catch (e) {
         console.error('LIFF init error:', e);
         setError('初期化に失敗しました');
@@ -111,17 +133,22 @@ export default function MiniAppPage() {
 
       <div className="max-w-md mx-auto p-4">
         <div className="space-y-3">
+          {menuItems.length === 0 && (
+            <div className="bg-white rounded-lg shadow-sm p-6 text-center">
+              <p className="text-gray-500">利用可能なメニューがありません</p>
+            </div>
+          )}
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => {
-                if (!item.disabled) {
+                if (!item.comingSoon) {
                   window.location.href = item.href;
                 }
               }}
-              disabled={item.disabled}
+              disabled={item.comingSoon}
               className={`w-full bg-white rounded-lg shadow-sm p-4 flex items-center text-left transition ${
-                item.disabled
+                item.comingSoon
                   ? 'opacity-50 cursor-not-allowed'
                   : 'hover:shadow-md active:bg-gray-50'
               }`}
@@ -131,7 +158,7 @@ export default function MiniAppPage() {
                 <p className="font-medium text-gray-900">{item.label}</p>
                 <p className="text-sm text-gray-500">{item.description}</p>
               </div>
-              {item.disabled && (
+              {item.comingSoon && (
                 <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">
                   準備中
                 </span>
