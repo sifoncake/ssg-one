@@ -357,6 +357,7 @@ export default function PaymentPage() {
                 type="number"
                 value={unitPrice || ''}
                 onChange={(e) => setUnitPrice(Number(e.target.value))}
+                onFocus={(e) => e.target.select()}
                 className="w-full border rounded-lg p-3 text-gray-900"
                 placeholder="0"
               />
@@ -367,6 +368,7 @@ export default function PaymentPage() {
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                onFocus={(e) => e.target.select()}
                 className="w-full border rounded-lg p-3 text-gray-900 text-center"
                 min="1"
               />
