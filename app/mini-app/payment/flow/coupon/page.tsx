@@ -1,8 +1,9 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-export default function CouponFlowPage() {
+function CouponFlowContent() {
   const searchParams = useSearchParams();
 
   const saleId = searchParams.get('saleId') || '';
@@ -45,5 +46,13 @@ export default function CouponFlowPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function CouponFlowPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">読み込み中...</div>}>
+      <CouponFlowContent />
+    </Suspense>
   );
 }

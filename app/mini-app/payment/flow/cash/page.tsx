@@ -1,9 +1,10 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
-export default function CashFlowPage() {
+function CashFlowContent() {
   const searchParams = useSearchParams();
 
   const saleId = searchParams.get('saleId') || '';
@@ -104,5 +105,13 @@ export default function CashFlowPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function CashFlowPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center">読み込み中...</div>}>
+      <CashFlowContent />
+    </Suspense>
   );
 }

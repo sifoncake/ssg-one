@@ -193,7 +193,7 @@ export default function PaymentPage() {
 
       const methodKey = PAYMENT_METHOD_KEYS[paymentMethod];
       const params = new URLSearchParams({
-        saleId: data.saleId || '',
+        saleId: data.sale?.id || '',
         amount: getCartTotal().toString(),
         method: paymentMethod,
       });
@@ -205,10 +205,6 @@ export default function PaymentPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleBack = () => {
-    window.location.href = '/mini-app';
   };
 
   if (isLoading) {
@@ -224,10 +220,7 @@ export default function PaymentPage() {
   return (
     <main className="min-h-screen bg-gray-50 pb-32">
       <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-md mx-auto px-4 py-3 flex items-center">
-          <button onClick={handleBack} className="mr-3 text-gray-600">
-            ← 戻る
-          </button>
+        <div className="max-w-md mx-auto px-4 py-3">
           <h1 className="text-lg font-bold text-gray-900">💰 決済</h1>
         </div>
       </header>
