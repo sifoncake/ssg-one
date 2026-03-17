@@ -1,10 +1,9 @@
 'use client';
 
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 export default function CouponFlowPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   const saleId = searchParams.get('saleId') || '';
   const amount = Number(searchParams.get('amount') || 0);
@@ -12,7 +11,7 @@ export default function CouponFlowPage() {
 
   const handleComplete = () => {
     const params = new URLSearchParams({ saleId, amount: amount.toString(), method });
-    router.push(`/mini-app/payment/complete?${params.toString()}`);
+    window.location.href = `/mini-app/payment/complete?${params.toString()}`;
   };
 
   return (

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import liff from '@line/liff';
 
 type Store = {
@@ -57,8 +56,6 @@ export default function PaymentPage() {
   const [paymentMethod, setPaymentMethod] = useState<typeof PAYMENT_METHODS[number]>('現金');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [todaySummary, setTodaySummary] = useState<{ totalAmount: number; transactionCount: number } | null>(null);
-
-  const router = useRouter();
 
   useEffect(() => {
     const init = async () => {
@@ -200,7 +197,7 @@ export default function PaymentPage() {
         amount: getCartTotal().toString(),
         method: paymentMethod,
       });
-      router.push(`/mini-app/payment/flow/${methodKey}?${params.toString()}`);
+      window.location.href = `/mini-app/payment/flow/${methodKey}?${params.toString()}`;
 
     } catch (e) {
       console.error('Submit error:', e);

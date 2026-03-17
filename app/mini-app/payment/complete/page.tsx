@@ -1,10 +1,9 @@
 'use client';
 
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 export default function PaymentCompletePage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   const amount = Number(searchParams.get('amount') || 0);
   const method = searchParams.get('method') || '';
@@ -35,13 +34,13 @@ export default function PaymentCompletePage() {
 
       <div className="p-4 space-y-3 max-w-md mx-auto w-full">
         <button
-          onClick={() => router.push('/mini-app/payment')}
+          onClick={() => { window.location.href = '/mini-app/payment'; }}
           className="w-full py-4 rounded-lg bg-blue-600 text-white font-bold text-lg active:bg-blue-700"
         >
           次の会計へ
         </button>
         <button
-          onClick={() => router.push('/mini-app')}
+          onClick={() => { window.location.href = '/mini-app'; }}
           className="w-full py-3 rounded-lg border border-gray-300 text-gray-700 font-medium active:bg-gray-50"
         >
           ホームへ戻る
