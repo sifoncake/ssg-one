@@ -18,11 +18,12 @@ var (
 	supabaseService *services.SupabaseService
 	claudeService   *services.ClaudeService
 
-	adminHandler    *handlers.AdminHandler
-	authHandler     *handlers.AuthHandler
+	adminHandler     *handlers.AdminHandler
+	authHandler      *handlers.AuthHandler
 	broadcastHandler *handlers.BroadcastHandler
-	pushHandler     *handlers.PushHandler
-	webhookHandler  *handlers.LINEWebhookHandler
+	pushHandler      *handlers.PushHandler
+	webhookHandler   *handlers.LINEWebhookHandler
+	devTaskHandler   *handlers.DevTaskHandler
 )
 
 func init() {
@@ -42,6 +43,7 @@ func init() {
 		claudeService,
 		adminHandler,
 	)
+	devTaskHandler = handlers.NewDevTaskHandler(lineService, supabaseService)
 }
 
 // Handler is the Lambda function entry point
@@ -81,6 +83,10 @@ func Handler(request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPRes
 	case "verify-magic":
 		// Verify magic link token
 		return authHandler.HandleVerify(request), nil
+
+	case "dev-task-notify":
+		// Dev task completion notification
+		return devTaskHandler.HandleNotify(request), nil
 
 	default:
 		fmt.Printf("Unknown path: %s\n", path)

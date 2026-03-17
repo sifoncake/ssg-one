@@ -261,6 +261,106 @@ func (s *SupabaseService) GetMagicLinkToken(token string) (*models.AdminToken, e
 	return &tokens[0], nil
 }
 
+// DevTask represents a development task
+type DevTask struct {
+	ID                 string    `json:"id,omitempty"`
+	UserID             string    `json:"user_id"`
+	Instruction        string    `json:"instruction"`
+	Status             string    `json:"status"`
+	Result             *string   `json:"result,omitempty"`
+	AllowGitOperations bool      `json:"allow_git_operations"`
+	CreatedAt          time.Time `json:"created_at,omitempty"`
+	UpdatedAt          time.Time `json:"updated_at,omitempty"`
+}
+
+// CreateDevTask creates a new development task
+func (s *SupabaseService) CreateDevTask(userID, instruction string, allowGitOps bool) (*DevTask, error) {
+	url := fmt.Sprintf("%s/rest/v1/dev_tasks", s.baseURL)
+
+	task := DevTask{
+		UserID:             userID,
+		Instruction:        instruction,
+		Status:             "pending",
+		AllowGitOperations: allowGitOps,
+	}
+
+	reqBody, err := json.Marshal(task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("apikey", s.apiKey)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.apiKey))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=representation")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("supabase returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tasks []DevTask
+	if err := json.Unmarshal(body, &tasks); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		return nil, fmt.Errorf("no task returned")
+	}
+
+	return &tasks[0], nil
+}
+
+// GetPendingDevTasksForNotification gets tasks that just completed (done/failed) and need notification
+func (s *SupabaseService) GetCompletedDevTasks() ([]DevTask, error) {
+	url := fmt.Sprintf("%s/rest/v1/dev_tasks?status=in.(done,failed)&select=*&order=updated_at.desc&limit=10", s.baseURL)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("apikey", s.apiKey)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.apiKey))
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tasks: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("supabase returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tasks []DevTask
+	if err := json.Unmarshal(body, &tasks); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return tasks, nil
+}
+
 // MarkTokenAsUsed marks a magic link token as used
 func (s *SupabaseService) MarkTokenAsUsed(token string) error {
 	url := fmt.Sprintf("%s/rest/v1/admin_tokens?token=eq.%s", s.baseURL, token)

@@ -68,13 +68,16 @@ func (h *LINEWebhookHandler) Handle(request events.APIGatewayV2HTTPRequest) even
 		var replyMessage string
 		trimmedMessage := strings.TrimSpace(userMessage)
 
-		switch trimmedMessage {
-		case "管理画面":
+		switch {
+		case trimmedMessage == "管理画面":
 			// Check if user is admin and handle magic link generation
 			replyMessage = h.adminHandler.HandleAdminRequest(userID)
-		case "メニュー":
+		case trimmedMessage == "メニュー":
 			// Return mini-app menu
 			replyMessage = h.handleMenuCommand(userID)
+		case strings.HasPrefix(trimmedMessage, "dev-deploy\n"), strings.HasPrefix(trimmedMessage, "dev\n"):
+			// Handle dev task (only for authorized user)
+			replyMessage = h.handleDevTask(userID, trimmedMessage)
 		default:
 			// Handle regular message with Claude AI
 			replyMessage = h.handleClaudeMessage(userMessage)
@@ -142,4 +145,54 @@ func (h *LINEWebhookHandler) handleClaudeMessage(userMessage string) string {
 	}
 
 	return claudeResponse
+}
+
+// handleDevTask handles development task requests
+func (h *LINEWebhookHandler) handleDevTask(userID, message string) string {
+	// Check if user is authorized
+	devUserID := os.Getenv("DEV_LINE_USER_ID")
+	if devUserID == "" {
+		fmt.Println("DEV_LINE_USER_ID not configured")
+		return "この機能は現在利用できません。"
+	}
+
+	if userID != devUserID {
+		fmt.Printf("Unauthorized dev task request from user: %s\n", userID)
+		return "この機能を使用する権限がありません。"
+	}
+
+	// Determine if this is a deploy task (with git operations)
+	allowGitOps := false
+	var instruction string
+
+	if strings.HasPrefix(message, "dev-deploy\n") {
+		// dev-deploy: Allow git commit & push
+		allowGitOps = true
+		instruction = strings.TrimPrefix(message, "dev-deploy\n")
+		instruction = strings.TrimSpace(instruction)
+	} else {
+		// dev: No git operations
+		allowGitOps = false
+		instruction = strings.TrimPrefix(message, "dev\n")
+		instruction = strings.TrimSpace(instruction)
+	}
+
+	if instruction == "" {
+		return "指示文が空です。dev\\n または dev-deploy\\n の後に指示を入力してください。"
+	}
+
+	// Create task in database
+	task, err := h.supabaseService.CreateDevTask(userID, instruction, allowGitOps)
+	if err != nil {
+		fmt.Printf("Failed to create dev task: %v\n", err)
+		return "タスクの登録に失敗しました。"
+	}
+
+	emoji := "⚙️"
+	if allowGitOps {
+		emoji = "🚀"
+	}
+
+	fmt.Printf("Dev task created: %s (allow_git_ops: %v)\n", task.ID, allowGitOps)
+	return fmt.Sprintf("%s タスクを受け付けました", emoji)
 }
