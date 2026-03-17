@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import liff from '@line/liff';
 
 type Store = {
@@ -19,6 +20,13 @@ type CartItem = {
 
 const ITEM_TYPES = ['施術', '物販', '回数券'] as const;
 const PAYMENT_METHODS = ['現金', 'カード', 'QRコード', '回数券'] as const;
+
+const PAYMENT_METHOD_KEYS: Record<typeof PAYMENT_METHODS[number], string> = {
+  '現金': 'cash',
+  'カード': 'card',
+  'QRコード': 'qr',
+  '回数券': 'coupon',
+};
 
 // Preset items for quick selection
 const PRESET_ITEMS = [
@@ -48,8 +56,9 @@ export default function PaymentPage() {
   // Payment
   const [paymentMethod, setPaymentMethod] = useState<typeof PAYMENT_METHODS[number]>('現金');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [todaySummary, setTodaySummary] = useState<{ totalAmount: number; transactionCount: number } | null>(null);
+
+  const router = useRouter();
 
   useEffect(() => {
     const init = async () => {
@@ -157,7 +166,6 @@ export default function PaymentPage() {
 
     setIsSubmitting(true);
     setError(null);
-    setSuccessMessage(null);
 
     try {
       const idToken = liff.getIDToken();
@@ -186,9 +194,13 @@ export default function PaymentPage() {
         return;
       }
 
-      setSuccessMessage(`¥${getCartTotal().toLocaleString()} の売上を登録しました`);
-      setCart([]);
-      await fetchTodaySummary(idToken);
+      const methodKey = PAYMENT_METHOD_KEYS[paymentMethod];
+      const params = new URLSearchParams({
+        saleId: data.saleId || '',
+        amount: getCartTotal().toString(),
+        method: paymentMethod,
+      });
+      router.push(`/mini-app/payment/flow/${methodKey}?${params.toString()}`);
 
     } catch (e) {
       console.error('Submit error:', e);
@@ -236,11 +248,6 @@ export default function PaymentPage() {
         )}
 
         {/* Messages */}
-        {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-green-800">{successMessage}</p>
-          </div>
-        )}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800">{error}</p>
