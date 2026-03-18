@@ -27,14 +27,6 @@ type CartItem = {
 };
 
 const ITEM_TYPES = ['施術', '物販', '回数券'] as const;
-const PAYMENT_METHODS = ['現金', 'カード', 'QRコード', '回数券'] as const;
-
-const PAYMENT_METHOD_KEYS: Record<typeof PAYMENT_METHODS[number], string> = {
-  '現金': 'cash',
-  'カード': 'card',
-  'QRコード': 'qr',
-  '回数券': 'coupon',
-};
 
 export default function PaymentPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -52,10 +44,6 @@ export default function PaymentPage() {
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [quantity, setQuantity] = useState<number>(1);
   const [taxRate, setTaxRate] = useState<number>(10);
-
-  // Payment
-  const [paymentMethod, setPaymentMethod] = useState<typeof PAYMENT_METHODS[number]>('現金');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -159,56 +147,20 @@ export default function PaymentPage() {
     return cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   };
 
-  const handleSubmit = async () => {
+  const handleProceed = () => {
     if (!selectedStore || cart.length === 0) {
       setError('商品をカートに追加してください');
       return;
     }
 
-    setIsSubmitting(true);
-    setError(null);
+    // Save cart data to sessionStorage
+    sessionStorage.setItem('paymentCart', JSON.stringify({
+      storeId: selectedStore,
+      cart,
+      total: getCartTotal(),
+    }));
 
-    try {
-      const idToken = liff.getIDToken();
-
-      const response = await fetch('/api/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lineIdToken: idToken,
-          storeId: selectedStore,
-          paymentMethod,
-          items: cart.map(item => ({
-            itemName: item.itemName,
-            itemType: item.itemType,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            taxRate: item.taxRate,
-          })),
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || '登録に失敗しました');
-        return;
-      }
-
-      const methodKey = PAYMENT_METHOD_KEYS[paymentMethod];
-      const params = new URLSearchParams({
-        saleId: data.sale?.id || '',
-        amount: getCartTotal().toString(),
-        method: paymentMethod,
-      });
-      window.location.href = `/mini-app/payment/flow/${methodKey}?${params.toString()}`;
-
-    } catch (e) {
-      console.error('Submit error:', e);
-      setError('エラーが発生しました');
-    } finally {
-      setIsSubmitting(false);
-    }
+    window.location.href = '/mini-app/payment/method';
   };
 
   if (isLoading) {
@@ -225,7 +177,7 @@ export default function PaymentPage() {
     <main className="min-h-screen bg-gray-50 pb-32">
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 py-3">
-          <h1 className="text-lg font-bold text-gray-900">💰 決済</h1>
+          <h1 className="text-lg font-bold text-gray-900">🛒 商品選択</h1>
         </div>
       </header>
 
@@ -398,26 +350,6 @@ export default function PaymentPage() {
             カートに追加
           </button>
         </div>
-
-        {/* Payment Method */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">支払方法</label>
-          <div className="grid grid-cols-2 gap-2">
-            {PAYMENT_METHODS.map((method) => (
-              <button
-                key={method}
-                onClick={() => setPaymentMethod(method)}
-                className={`py-2 rounded-lg border ${
-                  paymentMethod === method
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 text-gray-700'
-                }`}
-              >
-                {method}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Fixed Submit Button */}
@@ -425,15 +357,10 @@ export default function PaymentPage() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
           <div className="max-w-md mx-auto">
             <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className={`w-full py-4 rounded-lg text-white font-bold text-lg ${
-                isSubmitting
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 active:bg-blue-700'
-              }`}
+              onClick={handleProceed}
+              className="w-full py-4 rounded-lg text-white font-bold text-lg bg-blue-600 active:bg-blue-700"
             >
-              {isSubmitting ? '登録中...' : `¥${getCartTotal().toLocaleString()} を登録`}
+              お買い上げ ¥{getCartTotal().toLocaleString()}
             </button>
           </div>
         </div>
