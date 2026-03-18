@@ -12,7 +12,7 @@
  * - 実用上の差は小さい（LIFF版は権限ポップアップなし・若干速い程度）
  */
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -28,22 +28,41 @@ function QrFlowContent() {
   const [error, setError] = useState<string | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const scannerContainerId = 'qr-reader';
+  const scannerRef = useRef<HTMLDivElement>(null);
+
+  const stopScanner = useCallback(async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+        html5QrCodeRef.current = null;
+      } catch {
+        // Ignore
+      }
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().catch(() => {});
-      }
+      stopScanner();
     };
-  }, []);
+  }, [stopScanner]);
 
   const handleScan = async () => {
-    setIsScanning(true);
+    if (!scannerRef.current) return;
+
     setError(null);
+    setIsScanning(true);
+
+    // Wait for DOM to update
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
-      const html5QrCode = new Html5Qrcode(scannerContainerId);
+      const scannerId = 'qr-scanner-container';
+
+      // Clean up any existing scanner
+      await stopScanner();
+
+      const html5QrCode = new Html5Qrcode(scannerId);
       html5QrCodeRef.current = html5QrCode;
 
       await html5QrCode.start(
@@ -54,7 +73,7 @@ function QrFlowContent() {
         },
         (decodedText) => {
           setScannedCode(decodedText);
-          html5QrCode.stop().catch(() => {});
+          stopScanner();
           setIsScanning(false);
         },
         () => {
@@ -69,13 +88,7 @@ function QrFlowContent() {
   };
 
   const handleStopScan = async () => {
-    if (html5QrCodeRef.current) {
-      try {
-        await html5QrCodeRef.current.stop();
-      } catch {
-        // Ignore
-      }
-    }
+    await stopScanner();
     setIsScanning(false);
   };
 
@@ -109,22 +122,23 @@ function QrFlowContent() {
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-white rounded-lg shadow-sm p-6" ref={scannerRef}>
           {!scannedCode ? (
             <div className="text-center space-y-4">
+              {/* Scanner container - always present */}
+              <div
+                id="qr-scanner-container"
+                className={`w-full max-w-[300px] mx-auto ${isScanning ? '' : 'hidden'}`}
+                style={{ minHeight: isScanning ? '300px' : '0' }}
+              />
+
               {isScanning ? (
-                <div>
-                  <div
-                    id={scannerContainerId}
-                    className="w-full max-w-[300px] mx-auto"
-                  />
-                  <button
-                    onClick={handleStopScan}
-                    className="mt-4 px-4 py-2 text-gray-600 border border-gray-300 rounded-lg"
-                  >
-                    キャンセル
-                  </button>
-                </div>
+                <button
+                  onClick={handleStopScan}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg"
+                >
+                  キャンセル
+                </button>
               ) : (
                 <>
                   <div className="w-24 h-24 mx-auto bg-gray-100 rounded-lg flex items-center justify-center">
@@ -139,7 +153,6 @@ function QrFlowContent() {
                   >
                     QRコードをスキャン
                   </button>
-                  <div id={scannerContainerId} className="hidden" />
                 </>
               )}
             </div>
