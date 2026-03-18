@@ -9,7 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/ssg-one/backend-lambda/models"
+	"github.com/sifoncake/line-to-claude/models"
+	localmodels "github.com/ssg-one/backend-lambda/models"
 )
 
 type SupabaseService struct {
@@ -39,7 +40,7 @@ func NewSupabaseService() *SupabaseService {
 }
 
 // UpsertUser creates or updates a LINE user in the database
-func (s *SupabaseService) UpsertUser(user models.LINEUser) error {
+func (s *SupabaseService) UpsertUser(user localmodels.LINEUser) error {
 	url := fmt.Sprintf("%s/rest/v1/line_users", s.baseURL)
 
 	reqBody, err := json.Marshal(user)
@@ -72,7 +73,7 @@ func (s *SupabaseService) UpsertUser(user models.LINEUser) error {
 }
 
 // GetUserProfile retrieves a LINE user's profile
-func (s *SupabaseService) GetUserProfile(lineUserID string) (*models.LINEUser, error) {
+func (s *SupabaseService) GetUserProfile(lineUserID string) (*localmodels.LINEUser, error) {
 	url := fmt.Sprintf("%s/rest/v1/line_users?line_user_id=eq.%s&select=*", s.baseURL, lineUserID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -98,7 +99,7 @@ func (s *SupabaseService) GetUserProfile(lineUserID string) (*models.LINEUser, e
 		return nil, fmt.Errorf("supabase returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var users []models.LINEUser
+	var users []localmodels.LINEUser
 	if err := json.Unmarshal(body, &users); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -191,7 +192,7 @@ func (s *SupabaseService) GetAdminEmail(lineUserID string) (string, error) {
 }
 
 // CreateMagicLinkToken creates a new magic link token in the database
-func (s *SupabaseService) CreateMagicLinkToken(token models.AdminToken) error {
+func (s *SupabaseService) CreateMagicLinkToken(token localmodels.AdminToken) error {
 	url := fmt.Sprintf("%s/rest/v1/admin_tokens", s.baseURL)
 
 	reqBody, err := json.Marshal(token)
@@ -223,7 +224,7 @@ func (s *SupabaseService) CreateMagicLinkToken(token models.AdminToken) error {
 }
 
 // GetMagicLinkToken retrieves a magic link token from the database
-func (s *SupabaseService) GetMagicLinkToken(token string) (*models.AdminToken, error) {
+func (s *SupabaseService) GetMagicLinkToken(token string) (*localmodels.AdminToken, error) {
 	url := fmt.Sprintf("%s/rest/v1/admin_tokens?token=eq.%s&select=*", s.baseURL, token)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -249,7 +250,7 @@ func (s *SupabaseService) GetMagicLinkToken(token string) (*models.AdminToken, e
 		return nil, fmt.Errorf("supabase returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var tokens []models.AdminToken
+	var tokens []localmodels.AdminToken
 	if err := json.Unmarshal(body, &tokens); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -262,22 +263,11 @@ func (s *SupabaseService) GetMagicLinkToken(token string) (*models.AdminToken, e
 }
 
 // DevTask represents a development task
-type DevTask struct {
-	ID                 string    `json:"id,omitempty"`
-	UserID             string    `json:"user_id"`
-	Instruction        string    `json:"instruction"`
-	Status             string    `json:"status"`
-	Result             *string   `json:"result,omitempty"`
-	AllowGitOperations bool      `json:"allow_git_operations"`
-	CreatedAt          time.Time `json:"created_at,omitempty"`
-	UpdatedAt          time.Time `json:"updated_at,omitempty"`
-}
-
 // CreateDevTask creates a new development task
-func (s *SupabaseService) CreateDevTask(userID, instruction string, allowGitOps bool) (*DevTask, error) {
+func (s *SupabaseService) CreateDevTask(userID, instruction string, allowGitOps bool) (*models.DevTask, error) {
 	url := fmt.Sprintf("%s/rest/v1/dev_tasks", s.baseURL)
 
-	task := DevTask{
+	task := models.DevTask{
 		UserID:             userID,
 		Instruction:        instruction,
 		Status:             "pending",
@@ -314,7 +304,7 @@ func (s *SupabaseService) CreateDevTask(userID, instruction string, allowGitOps 
 		return nil, fmt.Errorf("supabase returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var tasks []DevTask
+	var tasks []models.DevTask
 	if err := json.Unmarshal(body, &tasks); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
@@ -327,7 +317,7 @@ func (s *SupabaseService) CreateDevTask(userID, instruction string, allowGitOps 
 }
 
 // GetPendingDevTasksForNotification gets tasks that just completed (done/failed) and need notification
-func (s *SupabaseService) GetCompletedDevTasks() ([]DevTask, error) {
+func (s *SupabaseService) GetCompletedDevTasks() ([]models.DevTask, error) {
 	url := fmt.Sprintf("%s/rest/v1/dev_tasks?status=in.(done,failed)&select=*&order=updated_at.desc&limit=10", s.baseURL)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -353,7 +343,7 @@ func (s *SupabaseService) GetCompletedDevTasks() ([]DevTask, error) {
 		return nil, fmt.Errorf("supabase returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var tasks []DevTask
+	var tasks []models.DevTask
 	if err := json.Unmarshal(body, &tasks); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
