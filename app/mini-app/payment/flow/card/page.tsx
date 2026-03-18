@@ -11,8 +11,8 @@ function CardFlowContent() {
   const method = searchParams.get('method') || 'カード';
 
   const handleComplete = () => {
-    const params = new URLSearchParams({ saleId, amount: amount.toString(), method });
-    window.location.href = `/mini-app/payment/complete?${params.toString()}`;
+    const params = new URLSearchParams({ saleId, method });
+    window.location.href = `/mini-app/payment/result?${params.toString()}`;
   };
 
   return (
