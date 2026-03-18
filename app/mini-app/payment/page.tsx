@@ -8,13 +8,22 @@ type Store = {
   store_name: string;
 };
 
+type Product = {
+  id: string;
+  name: string;
+  type: '施術' | '物販' | '回数券';
+  price: number;
+  tax_rate: number;
+  store_id: string | null;
+};
+
 type CartItem = {
   id: string;
   itemName: string;
   itemType: '施術' | '物販' | '回数券';
   quantity: number;
   unitPrice: number;
-  taxRate: 10 | 8;
+  taxRate: number;
 };
 
 const ITEM_TYPES = ['施術', '物販', '回数券'] as const;
@@ -27,20 +36,12 @@ const PAYMENT_METHOD_KEYS: Record<typeof PAYMENT_METHODS[number], string> = {
   '回数券': 'coupon',
 };
 
-// Preset items for quick selection
-const PRESET_ITEMS = [
-  { name: '60分コース', type: '施術' as const, price: 6000, taxRate: 10 as const },
-  { name: '90分コース', type: '施術' as const, price: 8500, taxRate: 10 as const },
-  { name: '120分コース', type: '施術' as const, price: 11000, taxRate: 10 as const },
-  { name: 'オイル', type: '物販' as const, price: 3000, taxRate: 10 as const },
-  { name: '回数券5回', type: '回数券' as const, price: 27500, taxRate: 10 as const },
-];
-
 export default function PaymentPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStore, setSelectedStore] = useState<string>('');
+  const [products, setProducts] = useState<Product[]>([]);
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -50,12 +51,11 @@ export default function PaymentPage() {
   const [itemType, setItemType] = useState<typeof ITEM_TYPES[number]>('施術');
   const [unitPrice, setUnitPrice] = useState<number>(0);
   const [quantity, setQuantity] = useState<number>(1);
-  const [taxRate, setTaxRate] = useState<10 | 8>(10);
+  const [taxRate, setTaxRate] = useState<number>(10);
 
   // Payment
   const [paymentMethod, setPaymentMethod] = useState<typeof PAYMENT_METHODS[number]>('現金');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [todaySummary, setTodaySummary] = useState<{ totalAmount: number; transactionCount: number } | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -83,11 +83,11 @@ export default function PaymentPage() {
           const storesData = await storesResponse.json();
           setStores(storesData.stores || []);
           if (storesData.stores?.length > 0) {
-            setSelectedStore(storesData.stores[0].id);
+            const firstStoreId = storesData.stores[0].id;
+            setSelectedStore(firstStoreId);
+            await fetchProducts(idToken, firstStoreId);
           }
         }
-
-        await fetchTodaySummary(idToken);
       } catch (e) {
         console.error('Init error:', e);
         setError('初期化に失敗しました');
@@ -99,29 +99,33 @@ export default function PaymentPage() {
     init();
   }, []);
 
-  const fetchTodaySummary = async (idToken: string | null) => {
+  // Fetch products when store changes
+  useEffect(() => {
+    if (!selectedStore) return;
+    const idToken = liff.getIDToken();
+    fetchProducts(idToken, selectedStore);
+  }, [selectedStore]);
+
+  const fetchProducts = async (idToken: string | null, storeId: string) => {
     if (!idToken) return;
     try {
-      const response = await fetch('/api/sales', {
+      const response = await fetch(`/api/products?store_id=${storeId}`, {
         headers: { 'x-line-id-token': idToken },
       });
       if (response.ok) {
         const data = await response.json();
-        setTodaySummary({
-          totalAmount: data.totalAmount,
-          transactionCount: data.transactionCount,
-        });
+        setProducts(data.products || []);
       }
     } catch (e) {
-      console.error('Failed to fetch summary:', e);
+      console.error('Failed to fetch products:', e);
     }
   };
 
-  const handlePresetSelect = (preset: typeof PRESET_ITEMS[number]) => {
-    setItemName(preset.name);
-    setItemType(preset.type);
-    setUnitPrice(preset.price);
-    setTaxRate(preset.taxRate);
+  const handlePresetSelect = (product: Product) => {
+    setItemName(product.name);
+    setItemType(product.type);
+    setUnitPrice(product.price);
+    setTaxRate(product.tax_rate);
     setQuantity(1);
   };
 
@@ -226,39 +230,12 @@ export default function PaymentPage() {
       </header>
 
       <div className="max-w-md mx-auto p-4 space-y-4">
-        {/* Today's Summary */}
-        {todaySummary && (
-          <div className="bg-blue-50 rounded-lg p-4">
-            <p className="text-sm text-blue-600 mb-1">本日の売上</p>
-            <p className="text-2xl font-bold text-blue-900">
-              ¥{todaySummary.totalAmount.toLocaleString()}
-            </p>
-            <p className="text-sm text-blue-600">{todaySummary.transactionCount}件</p>
-          </div>
-        )}
-
         {/* Messages */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-red-800">{error}</p>
           </div>
         )}
-
-        {/* Store Selection */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">店舗</label>
-          <select
-            value={selectedStore}
-            onChange={(e) => setSelectedStore(e.target.value)}
-            className="w-full border rounded-lg p-3 text-gray-900"
-          >
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.store_name}
-              </option>
-            ))}
-          </select>
-        </div>
 
         {/* Cart */}
         {cart.length > 0 && (
@@ -294,26 +271,28 @@ export default function PaymentPage() {
           </div>
         )}
 
-        {/* Preset Items */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">クイック選択</label>
-          <div className="grid grid-cols-2 gap-2">
-            {PRESET_ITEMS.map((preset) => (
-              <button
-                key={preset.name}
-                onClick={() => handlePresetSelect(preset)}
-                className={`p-2 rounded-lg border text-left text-sm ${
-                  itemName === preset.name
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <p className="font-medium text-gray-900">{preset.name}</p>
-                <p className="text-gray-500">¥{preset.price.toLocaleString()}</p>
-              </button>
-            ))}
+        {/* Product Selection */}
+        {products.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">商品選択</label>
+            <div className="grid grid-cols-2 gap-2">
+              {products.map((product) => (
+                <button
+                  key={product.id}
+                  onClick={() => handlePresetSelect(product)}
+                  className={`p-2 rounded-lg border text-left text-sm ${
+                    itemName === product.name
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className="font-medium text-gray-900">{product.name}</p>
+                  <p className="text-gray-500">¥{product.price.toLocaleString()}</p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Manual Input */}
         <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
