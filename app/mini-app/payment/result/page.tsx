@@ -39,8 +39,15 @@ function PaymentResultContent() {
 
       try {
         const liffId = process.env.NEXT_PUBLIC_MINI_APP_LIFF_ID;
-        if (liffId && !liff.isLoggedIn()) {
-          await liff.init({ liffId });
+        if (!liffId) {
+          throw new Error('LIFF ID not configured');
+        }
+
+        await liff.init({ liffId });
+
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
         }
 
         const idToken = liff.getIDToken();
