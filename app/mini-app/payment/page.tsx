@@ -330,9 +330,14 @@ export default function PaymentPage() {
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-2">金額</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={unitPrice || ''}
-                onChange={(e) => setUnitPrice(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setUnitPrice(val ? Number(val) : 0);
+                }}
                 onFocus={(e) => e.target.select()}
                 className="w-full border rounded-lg p-3 text-gray-900"
                 placeholder="0"
@@ -341,12 +346,16 @@ export default function PaymentPage() {
             <div className="w-20">
               <label className="block text-sm font-medium text-gray-700 mb-2">数量</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setQuantity(val ? Math.max(1, Number(val)) : 1);
+                }}
                 onFocus={(e) => e.target.select()}
                 className="w-full border rounded-lg p-3 text-gray-900 text-center"
-                min="1"
               />
             </div>
           </div>
