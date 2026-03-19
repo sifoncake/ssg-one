@@ -312,7 +312,7 @@ function QrFlowContent() {
             <div className="text-center space-y-4">
               {/* キャプチャ画像と検出位置表示 */}
               {finalImage ? (
-                <div className="relative w-full max-w-[300px] mx-auto rounded-lg overflow-hidden border-2 border-green-500">
+                <div className="relative w-full max-w-[300px] mx-auto rounded-lg overflow-hidden">
                   <img
                     src={finalImage}
                     alt="検出したQRコード"

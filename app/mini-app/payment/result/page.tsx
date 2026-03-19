@@ -30,15 +30,7 @@ function PaymentResultContent() {
   const [sale, setSale] = useState<SaleDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [qrImage, setQrImage] = useState<string | null>(null);
-
   useEffect(() => {
-    // sessionStorageからQRキャプチャ画像を取得
-    const capturedImage = sessionStorage.getItem('qrCapturedImage');
-    if (capturedImage) {
-      setQrImage(capturedImage);
-    }
-
     const fetchSaleDetail = async () => {
       if (!saleId) {
         setError('売上IDが見つかりません');
@@ -122,25 +114,6 @@ function PaymentResultContent() {
       </header>
 
       <div className="max-w-md mx-auto p-4 space-y-4">
-        {/* QRコード画像（QR決済の場合のみ） */}
-        {qrImage && (
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">読み取ったQRコード</p>
-            <div className="relative rounded-lg overflow-hidden border border-gray-200">
-              <img
-                src={qrImage}
-                alt="読み取ったQRコード"
-                className="w-full h-auto"
-              />
-            </div>
-            {providerName && (
-              <p className="text-sm text-gray-600 mt-2 text-center">
-                決済サービス: <span className="font-medium">{providerName}</span>
-              </p>
-            )}
-          </div>
-        )}
-
         {/* Sale Code */}
         <div className="bg-white rounded-lg shadow-sm p-4">
           <p className="text-xs text-gray-500 mb-1">伝票番号</p>
