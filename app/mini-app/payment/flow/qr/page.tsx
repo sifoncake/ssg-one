@@ -14,7 +14,63 @@
 
 import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeResult } from 'html5-qrcode';
+
+/**
+ * 金種判定
+ * QRコードの内容から決済サービスを判定する
+ */
+type PaymentProvider = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+};
+
+const PAYMENT_PROVIDERS: Record<string, PaymentProvider> = {
+  paypay: { id: 'paypay', name: 'PayPay', icon: '🔴', color: 'bg-red-500' },
+  linepay: { id: 'linepay', name: 'LINE Pay', icon: '💚', color: 'bg-green-500' },
+  rakuten: { id: 'rakuten', name: '楽天ペイ', icon: '🟤', color: 'bg-rose-600' },
+  dbarai: { id: 'dbarai', name: 'd払い', icon: '🔵', color: 'bg-pink-500' },
+  aupay: { id: 'aupay', name: 'au PAY', icon: '🟠', color: 'bg-orange-500' },
+  merpay: { id: 'merpay', name: 'メルペイ', icon: '🔴', color: 'bg-red-400' },
+  unknown: { id: 'unknown', name: '不明', icon: '❓', color: 'bg-gray-500' },
+};
+
+function detectPaymentProvider(qrValue: string): PaymentProvider {
+  const lower = qrValue.toLowerCase();
+
+  if (lower.includes('paypay.ne.jp') || lower.includes('paypay.co.jp')) {
+    return PAYMENT_PROVIDERS.paypay;
+  }
+  if (lower.includes('line.me/pay') || lower.startsWith('line://pay')) {
+    return PAYMENT_PROVIDERS.linepay;
+  }
+  if (lower.includes('pay.rakuten.co.jp') || lower.includes('r-pay')) {
+    return PAYMENT_PROVIDERS.rakuten;
+  }
+  if (lower.includes('point.dcm') || lower.includes('d-card') || lower.includes('docomo')) {
+    return PAYMENT_PROVIDERS.dbarai;
+  }
+  if (lower.includes('aupay') || lower.includes('auone.jp')) {
+    return PAYMENT_PROVIDERS.aupay;
+  }
+  if (lower.includes('merpay') || lower.includes('mercari')) {
+    return PAYMENT_PROVIDERS.merpay;
+  }
+  if (lower.startsWith('000201') || qrValue.includes('JPQR')) {
+    return PAYMENT_PROVIDERS.unknown;
+  }
+
+  return PAYMENT_PROVIDERS.unknown;
+}
+
+type QrBoundingBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 
 function QrFlowContent() {
   const searchParams = useSearchParams();
@@ -25,10 +81,14 @@ function QrFlowContent() {
 
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
+  const [detectedProvider, setDetectedProvider] = useState<PaymentProvider | null>(null);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [boundingBox, setBoundingBox] = useState<QrBoundingBox | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const stopScanner = useCallback(async () => {
     if (html5QrCodeRef.current) {
@@ -47,19 +107,62 @@ function QrFlowContent() {
     };
   }, [stopScanner]);
 
+  // 検出位置を描画
+  useEffect(() => {
+    if (capturedImage && boundingBox && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // 画像を描画
+        ctx.drawImage(img, 0, 0);
+
+        // QR検出位置を描画
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height);
+
+        // 角にマーカーを追加
+        const markerSize = 20;
+        ctx.fillStyle = '#00FF00';
+
+        // 左上
+        ctx.fillRect(boundingBox.x - 2, boundingBox.y - 2, markerSize, 6);
+        ctx.fillRect(boundingBox.x - 2, boundingBox.y - 2, 6, markerSize);
+
+        // 右上
+        ctx.fillRect(boundingBox.x + boundingBox.width - markerSize + 2, boundingBox.y - 2, markerSize, 6);
+        ctx.fillRect(boundingBox.x + boundingBox.width - 4, boundingBox.y - 2, 6, markerSize);
+
+        // 左下
+        ctx.fillRect(boundingBox.x - 2, boundingBox.y + boundingBox.height - 4, markerSize, 6);
+        ctx.fillRect(boundingBox.x - 2, boundingBox.y + boundingBox.height - markerSize + 2, 6, markerSize);
+
+        // 右下
+        ctx.fillRect(boundingBox.x + boundingBox.width - markerSize + 2, boundingBox.y + boundingBox.height - 4, markerSize, 6);
+        ctx.fillRect(boundingBox.x + boundingBox.width - 4, boundingBox.y + boundingBox.height - markerSize + 2, 6, markerSize);
+      };
+      img.src = capturedImage;
+    }
+  }, [capturedImage, boundingBox]);
+
   const handleScan = async () => {
     if (!scannerRef.current) return;
 
     setError(null);
     setIsScanning(true);
+    setCapturedImage(null);
+    setBoundingBox(null);
 
-    // Wait for DOM to update
     await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
       const scannerId = 'qr-scanner-container';
-
-      // Clean up any existing scanner
       await stopScanner();
 
       const html5QrCode = new Html5Qrcode(scannerId);
@@ -71,8 +174,47 @@ function QrFlowContent() {
           fps: 10,
           qrbox: { width: 250, height: 250 },
         },
-        (decodedText) => {
+        async (decodedText: string, decodedResult: Html5QrcodeResult) => {
+          // QRコードの位置情報を取得
+          let box: QrBoundingBox | null = null;
+
+          // decodedResult.result.cornerPoints から座標取得を試みる
+          const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
+          if (result.cornerPoints && result.cornerPoints.length >= 4) {
+            const points = result.cornerPoints;
+            const minX = Math.min(...points.map(p => p.x));
+            const maxX = Math.max(...points.map(p => p.x));
+            const minY = Math.min(...points.map(p => p.y));
+            const maxY = Math.max(...points.map(p => p.y));
+
+            box = {
+              x: minX,
+              y: minY,
+              width: maxX - minX,
+              height: maxY - minY,
+            };
+          }
+
+          // ビデオフレームをキャプチャ
+          const videoElement = document.querySelector(`#${scannerId} video`) as HTMLVideoElement;
+          if (videoElement) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = videoElement.videoWidth;
+            tempCanvas.height = videoElement.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            if (tempCtx) {
+              tempCtx.drawImage(videoElement, 0, 0);
+              setCapturedImage(tempCanvas.toDataURL('image/png'));
+            }
+          }
+
+          if (box) {
+            setBoundingBox(box);
+          }
+
           setScannedCode(decodedText);
+          const provider = detectPaymentProvider(decodedText);
+          setDetectedProvider(provider);
           stopScanner();
           setIsScanning(false);
         },
@@ -94,11 +236,17 @@ function QrFlowContent() {
 
   const handleComplete = () => {
     const params = new URLSearchParams({ saleId, method });
+    if (detectedProvider) {
+      params.set('provider', detectedProvider.id);
+    }
     window.location.href = `/mini-app/payment/result?${params.toString()}`;
   };
 
   const handleRescan = () => {
     setScannedCode(null);
+    setDetectedProvider(null);
+    setCapturedImage(null);
+    setBoundingBox(null);
     setError(null);
   };
 
@@ -125,7 +273,6 @@ function QrFlowContent() {
         <div className="bg-white rounded-lg shadow-sm p-6" ref={scannerRef}>
           {!scannedCode ? (
             <div className="text-center space-y-4">
-              {/* Scanner container - always present */}
               <div
                 id="qr-scanner-container"
                 className={`w-full max-w-[300px] mx-auto ${isScanning ? '' : 'hidden'}`}
@@ -158,18 +305,52 @@ function QrFlowContent() {
             </div>
           ) : (
             <div className="text-center space-y-4">
-              <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center">
-                <span className="text-3xl">✓</span>
-              </div>
+              {/* キャプチャ画像と検出位置表示 */}
+              {capturedImage && (
+                <div className="relative w-full max-w-[300px] mx-auto rounded-lg overflow-hidden border-2 border-green-500">
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-auto"
+                  />
+                  <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
+                    検出完了
+                  </div>
+                </div>
+              )}
+
+              {!capturedImage && (
+                <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+                  <span className="text-3xl">✓</span>
+                </div>
+              )}
+
               <p className="text-green-700 font-medium">QRコード読取完了</p>
+
+              {/* 金種判定結果 */}
+              {detectedProvider && (
+                <div className={`${detectedProvider.color} text-white rounded-lg p-4`}>
+                  <p className="text-sm opacity-90 mb-1">決済サービス</p>
+                  <p className="text-2xl font-bold">
+                    {detectedProvider.icon} {detectedProvider.name}
+                  </p>
+                </div>
+              )}
+
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-1">読み取り内容</p>
                 <p className="text-sm font-mono text-gray-700 break-all">
-                  {scannedCode.length > 50
-                    ? scannedCode.substring(0, 50) + '...'
+                  {scannedCode.length > 80
+                    ? scannedCode.substring(0, 80) + '...'
                     : scannedCode}
                 </p>
               </div>
+
+              {detectedProvider?.id === 'unknown' && (
+                <p className="text-sm text-amber-600">
+                  ※ 決済サービスを特定できませんでした
+                </p>
+              )}
+
               <button
                 onClick={handleRescan}
                 className="text-blue-600 text-sm underline"
@@ -179,6 +360,14 @@ function QrFlowContent() {
             </div>
           )}
         </div>
+
+        {/* 本番では決済APIを叩く部分 */}
+        {scannedCode && detectedProvider && detectedProvider.id !== 'unknown' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800">
+            <p className="font-medium mb-1">※ ポートフォリオ版</p>
+            <p>本番環境では、ここで {detectedProvider.name} API を呼び出して決済処理を行います。</p>
+          </div>
+        )}
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4">
