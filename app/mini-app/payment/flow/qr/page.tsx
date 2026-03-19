@@ -82,13 +82,11 @@ function QrFlowContent() {
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [detectedProvider, setDetectedProvider] = useState<PaymentProvider | null>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [boundingBox, setBoundingBox] = useState<QrBoundingBox | null>(null);
+  const [finalImage, setFinalImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const stopScanner = useCallback(async () => {
     if (html5QrCodeRef.current) {
@@ -107,57 +105,65 @@ function QrFlowContent() {
     };
   }, [stopScanner]);
 
-  // 検出位置を描画
-  useEffect(() => {
-    if (capturedImage && boundingBox && canvasRef.current) {
-      const canvas = canvasRef.current;
+  // QR検出位置に枠を描画した画像を生成
+  const createAnnotatedImage = (
+    videoElement: HTMLVideoElement,
+    boundingBox: QrBoundingBox | null
+  ): string | null => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) return null;
 
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
+      // ビデオフレームを描画
+      ctx.drawImage(videoElement, 0, 0);
 
-        // 画像を描画
-        ctx.drawImage(img, 0, 0);
+      // QR検出位置を描画
+      if (boundingBox) {
+        const padding = 10;
+        const x = boundingBox.x - padding;
+        const y = boundingBox.y - padding;
+        const w = boundingBox.width + padding * 2;
+        const h = boundingBox.height + padding * 2;
 
-        // QR検出位置を描画
+        // 枠線
         ctx.strokeStyle = '#00FF00';
         ctx.lineWidth = 4;
-        ctx.strokeRect(boundingBox.x, boundingBox.y, boundingBox.width, boundingBox.height);
+        ctx.strokeRect(x, y, w, h);
 
-        // 角にマーカーを追加
+        // 角マーカー
         const markerSize = 20;
         ctx.fillStyle = '#00FF00';
 
         // 左上
-        ctx.fillRect(boundingBox.x - 2, boundingBox.y - 2, markerSize, 6);
-        ctx.fillRect(boundingBox.x - 2, boundingBox.y - 2, 6, markerSize);
-
+        ctx.fillRect(x, y, markerSize, 6);
+        ctx.fillRect(x, y, 6, markerSize);
         // 右上
-        ctx.fillRect(boundingBox.x + boundingBox.width - markerSize + 2, boundingBox.y - 2, markerSize, 6);
-        ctx.fillRect(boundingBox.x + boundingBox.width - 4, boundingBox.y - 2, 6, markerSize);
-
+        ctx.fillRect(x + w - markerSize, y, markerSize, 6);
+        ctx.fillRect(x + w - 6, y, 6, markerSize);
         // 左下
-        ctx.fillRect(boundingBox.x - 2, boundingBox.y + boundingBox.height - 4, markerSize, 6);
-        ctx.fillRect(boundingBox.x - 2, boundingBox.y + boundingBox.height - markerSize + 2, 6, markerSize);
-
+        ctx.fillRect(x, y + h - 6, markerSize, 6);
+        ctx.fillRect(x, y + h - markerSize, 6, markerSize);
         // 右下
-        ctx.fillRect(boundingBox.x + boundingBox.width - markerSize + 2, boundingBox.y + boundingBox.height - 4, markerSize, 6);
-        ctx.fillRect(boundingBox.x + boundingBox.width - 4, boundingBox.y + boundingBox.height - markerSize + 2, 6, markerSize);
-      };
-      img.src = capturedImage;
+        ctx.fillRect(x + w - markerSize, y + h - 6, markerSize, 6);
+        ctx.fillRect(x + w - 6, y + h - markerSize, 6, markerSize);
+      }
+
+      return canvas.toDataURL('image/png');
+    } catch (e) {
+      console.error('Failed to create annotated image:', e);
+      return null;
     }
-  }, [capturedImage, boundingBox]);
+  };
 
   const handleScan = async () => {
     if (!scannerRef.current) return;
 
     setError(null);
     setIsScanning(true);
-    setCapturedImage(null);
-    setBoundingBox(null);
+    setFinalImage(null);
 
     await new Promise(resolve => setTimeout(resolve, 100));
 
@@ -176,9 +182,8 @@ function QrFlowContent() {
         },
         async (decodedText: string, decodedResult: Html5QrcodeResult) => {
           // QRコードの位置情報を取得
-          let box: QrBoundingBox | null = null;
+          let boundingBox: QrBoundingBox | null = null;
 
-          // decodedResult.result.cornerPoints から座標取得を試みる
           const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
           if (result.cornerPoints && result.cornerPoints.length >= 4) {
             const points = result.cornerPoints;
@@ -187,7 +192,7 @@ function QrFlowContent() {
             const minY = Math.min(...points.map(p => p.y));
             const maxY = Math.max(...points.map(p => p.y));
 
-            box = {
+            boundingBox = {
               x: minX,
               y: minY,
               width: maxX - minX,
@@ -195,27 +200,26 @@ function QrFlowContent() {
             };
           }
 
-          // ビデオフレームをキャプチャ
-          const videoElement = document.querySelector(`#${scannerId} video`) as HTMLVideoElement;
-          if (videoElement) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = videoElement.videoWidth;
-            tempCanvas.height = videoElement.videoHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (tempCtx) {
-              tempCtx.drawImage(videoElement, 0, 0);
-              setCapturedImage(tempCanvas.toDataURL('image/png'));
-            }
-          }
+          // ビデオ要素を取得してキャプチャ
+          // html5-qrcodeはコンテナ内にvideoを生成する
+          const container = document.getElementById(scannerId);
+          const videoElement = container?.querySelector('video') as HTMLVideoElement | null;
 
-          if (box) {
-            setBoundingBox(box);
+          if (videoElement && videoElement.readyState >= 2) {
+            const annotatedImage = createAnnotatedImage(videoElement, boundingBox);
+            if (annotatedImage) {
+              setFinalImage(annotatedImage);
+              // 結果画面で使うためにsessionStorageに保存
+              sessionStorage.setItem('qrCapturedImage', annotatedImage);
+            }
           }
 
           setScannedCode(decodedText);
           const provider = detectPaymentProvider(decodedText);
           setDetectedProvider(provider);
-          stopScanner();
+
+          // スキャナーを停止
+          await stopScanner();
           setIsScanning(false);
         },
         () => {
@@ -238,6 +242,7 @@ function QrFlowContent() {
     const params = new URLSearchParams({ saleId, method });
     if (detectedProvider) {
       params.set('provider', detectedProvider.id);
+      params.set('providerName', detectedProvider.name);
     }
     window.location.href = `/mini-app/payment/result?${params.toString()}`;
   };
@@ -245,9 +250,9 @@ function QrFlowContent() {
   const handleRescan = () => {
     setScannedCode(null);
     setDetectedProvider(null);
-    setCapturedImage(null);
-    setBoundingBox(null);
+    setFinalImage(null);
     setError(null);
+    sessionStorage.removeItem('qrCapturedImage');
   };
 
   return (
@@ -306,19 +311,18 @@ function QrFlowContent() {
           ) : (
             <div className="text-center space-y-4">
               {/* キャプチャ画像と検出位置表示 */}
-              {capturedImage && (
+              {finalImage ? (
                 <div className="relative w-full max-w-[300px] mx-auto rounded-lg overflow-hidden border-2 border-green-500">
-                  <canvas
-                    ref={canvasRef}
+                  <img
+                    src={finalImage}
+                    alt="検出したQRコード"
                     className="w-full h-auto"
                   />
                   <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
                     検出完了
                   </div>
                 </div>
-              )}
-
-              {!capturedImage && (
+              ) : (
                 <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center">
                   <span className="text-3xl">✓</span>
                 </div>
