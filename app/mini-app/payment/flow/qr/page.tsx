@@ -181,35 +181,47 @@ function QrFlowContent() {
           qrbox: { width: 250, height: 250 },
         },
         async (decodedText: string, decodedResult: Html5QrcodeResult) => {
-          // QRコードの位置情報を取得
-          let boundingBox: QrBoundingBox | null = null;
-
-          const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
-          if (result.cornerPoints && result.cornerPoints.length >= 4) {
-            const points = result.cornerPoints;
-            const minX = Math.min(...points.map(p => p.x));
-            const maxX = Math.max(...points.map(p => p.x));
-            const minY = Math.min(...points.map(p => p.y));
-            const maxY = Math.max(...points.map(p => p.y));
-
-            boundingBox = {
-              x: minX,
-              y: minY,
-              width: maxX - minX,
-              height: maxY - minY,
-            };
-          }
-
           // ビデオ要素を取得してキャプチャ
-          // html5-qrcodeはコンテナ内にvideoを生成する
           const container = document.getElementById(scannerId);
           const videoElement = container?.querySelector('video') as HTMLVideoElement | null;
 
           if (videoElement && videoElement.readyState >= 2) {
+            // QRコードの位置情報を取得
+            let boundingBox: QrBoundingBox | null = null;
+
+            const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
+            if (result.cornerPoints && result.cornerPoints.length >= 4) {
+              const points = result.cornerPoints;
+              const minX = Math.min(...points.map(p => p.x));
+              const maxX = Math.max(...points.map(p => p.x));
+              const minY = Math.min(...points.map(p => p.y));
+              const maxY = Math.max(...points.map(p => p.y));
+              const w = maxX - minX;
+              const h = maxY - minY;
+              // cornerPointsが有効な範囲を持っているときだけ使う
+              if (w > 20 && h > 20) {
+                boundingBox = { x: minX, y: minY, width: w, height: h };
+              }
+            }
+
+            // cornerPointsが取得できなかった場合はqrbox（250×250・中央）の位置を使う
+            if (!boundingBox) {
+              const displayW = videoElement.clientWidth || 300;
+              const displayH = videoElement.clientHeight || 300;
+              const scaleX = videoElement.videoWidth / displayW;
+              const scaleY = videoElement.videoHeight / displayH;
+              const qrboxSize = 250;
+              boundingBox = {
+                x: Math.max(0, (displayW - qrboxSize) / 2) * scaleX,
+                y: Math.max(0, (displayH - qrboxSize) / 2) * scaleY,
+                width: qrboxSize * scaleX,
+                height: qrboxSize * scaleY,
+              };
+            }
+
             const annotatedImage = createAnnotatedImage(videoElement, boundingBox);
             if (annotatedImage) {
               setFinalImage(annotatedImage);
-              // 結果画面で使うためにsessionStorageに保存
               sessionStorage.setItem('qrCapturedImage', annotatedImage);
             }
           }
