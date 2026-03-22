@@ -106,10 +106,10 @@ function QrFlowContent() {
   }, [stopScanner]);
 
   // QR検出位置に枠を描画した画像を生成
-  const createAnnotatedImage = (
+  const createAnnotatedImage = async (
     videoElement: HTMLVideoElement,
     boundingBox: QrBoundingBox | null
-  ): string | null => {
+  ): Promise<string | null> => {
     try {
       const canvas = document.createElement('canvas');
       canvas.width = videoElement.videoWidth;
@@ -119,6 +119,38 @@ function QrFlowContent() {
 
       // ビデオフレームを描画
       ctx.drawImage(videoElement, 0, 0);
+
+      // boundingBoxが未確定の場合はキャプチャ画像から再検出
+      if (!boundingBox) {
+        // 方法1: BarcodeDetector APIでキャンバス上のQRコード位置を正確に取得
+        if ('BarcodeDetector' in window) {
+          try {
+            const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+            const bitmap = await createImageBitmap(canvas);
+            const barcodes = await detector.detect(bitmap);
+            if (barcodes.length > 0) {
+              const b = barcodes[0].boundingBox;
+              boundingBox = { x: b.x, y: b.y, width: b.width, height: b.height };
+            }
+          } catch { /* 非対応ブラウザは無視 */ }
+        }
+
+        // 方法2: qrboxの位置をフォールバックとして使用
+        if (!boundingBox) {
+          const videoRect = videoElement.getBoundingClientRect();
+          if (videoRect.width > 0 && videoRect.height > 0) {
+            const scaleX = videoElement.videoWidth / videoRect.width;
+            const scaleY = videoElement.videoHeight / videoRect.height;
+            const qrboxSize = 250;
+            boundingBox = {
+              x: Math.max(0, (videoRect.width - qrboxSize) / 2) * scaleX,
+              y: Math.max(0, (videoRect.height - qrboxSize) / 2) * scaleY,
+              width: qrboxSize * scaleX,
+              height: qrboxSize * scaleY,
+            };
+          }
+        }
+      }
 
       // QR検出位置を描画
       if (boundingBox) {
@@ -186,40 +218,21 @@ function QrFlowContent() {
           const videoElement = container?.querySelector('video') as HTMLVideoElement | null;
 
           if (videoElement && videoElement.readyState >= 2) {
-            // QRコードの位置情報を取得
+            // cornerPointsが取得できれば使う（できない場合はcreateAnnotatedImage内でフォールバック）
             let boundingBox: QrBoundingBox | null = null;
-
             const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
             if (result.cornerPoints && result.cornerPoints.length >= 4) {
               const points = result.cornerPoints;
-              const minX = Math.min(...points.map(p => p.x));
-              const maxX = Math.max(...points.map(p => p.x));
-              const minY = Math.min(...points.map(p => p.y));
-              const maxY = Math.max(...points.map(p => p.y));
-              const w = maxX - minX;
-              const h = maxY - minY;
-              // cornerPointsが有効な範囲を持っているときだけ使う
+              const xs = points.map(p => p.x);
+              const ys = points.map(p => p.y);
+              const w = Math.max(...xs) - Math.min(...xs);
+              const h = Math.max(...ys) - Math.min(...ys);
               if (w > 20 && h > 20) {
-                boundingBox = { x: minX, y: minY, width: w, height: h };
+                boundingBox = { x: Math.min(...xs), y: Math.min(...ys), width: w, height: h };
               }
             }
 
-            // cornerPointsが取得できなかった場合はqrbox（250×250・中央）の位置を使う
-            if (!boundingBox) {
-              const displayW = videoElement.clientWidth || 300;
-              const displayH = videoElement.clientHeight || 300;
-              const scaleX = videoElement.videoWidth / displayW;
-              const scaleY = videoElement.videoHeight / displayH;
-              const qrboxSize = 250;
-              boundingBox = {
-                x: Math.max(0, (displayW - qrboxSize) / 2) * scaleX,
-                y: Math.max(0, (displayH - qrboxSize) / 2) * scaleY,
-                width: qrboxSize * scaleX,
-                height: qrboxSize * scaleY,
-              };
-            }
-
-            const annotatedImage = createAnnotatedImage(videoElement, boundingBox);
+            const annotatedImage = await createAnnotatedImage(videoElement, boundingBox);
             if (annotatedImage) {
               setFinalImage(annotatedImage);
               sessionStorage.setItem('qrCapturedImage', annotatedImage);
