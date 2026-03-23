@@ -66,11 +66,11 @@ function detectPaymentProvider(qrValue: string): PaymentProvider {
   return PAYMENT_PROVIDERS.unknown;
 }
 
-type QrBoundingBox = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+type QrCorners = {
+  topLeft: { x: number; y: number };
+  topRight: { x: number; y: number };
+  bottomRight: { x: number; y: number };
+  bottomLeft: { x: number; y: number };
 };
 
 function QrFlowContent() {
@@ -109,7 +109,7 @@ function QrFlowContent() {
   // QR検出位置に枠を描画した画像を生成
   const createAnnotatedImage = (
     videoElement: HTMLVideoElement,
-    boundingBox: QrBoundingBox | null
+    corners: QrCorners | null
   ): string | null => {
     try {
       const canvas = document.createElement('canvas');
@@ -121,52 +121,39 @@ function QrFlowContent() {
       // ビデオフレームを描画
       ctx.drawImage(videoElement, 0, 0);
 
-      // boundingBoxが未確定の場合はjsQRでキャプチャ画像から正確な位置を取得
-      if (!boundingBox) {
+      // cornersが未確定の場合はjsQRでキャプチャ画像から正確な位置を取得
+      if (!corners) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code) {
-          const { topLeftCorner: tl, topRightCorner: tr, bottomLeftCorner: bl, bottomRightCorner: br } = code.location;
-          const xs = [tl.x, tr.x, bl.x, br.x];
-          const ys = [tl.y, tr.y, bl.y, br.y];
-          boundingBox = {
-            x: Math.min(...xs),
-            y: Math.min(...ys),
-            width: Math.max(...xs) - Math.min(...xs),
-            height: Math.max(...ys) - Math.min(...ys),
-          };
+          const { topLeftCorner: tl, topRightCorner: tr, bottomRightCorner: br, bottomLeftCorner: bl } = code.location;
+          corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
         }
       }
 
-      // QR検出位置を描画
-      if (boundingBox) {
-        const padding = 10;
-        const x = boundingBox.x - padding;
-        const y = boundingBox.y - padding;
-        const w = boundingBox.width + padding * 2;
-        const h = boundingBox.height + padding * 2;
+      // QR検出位置を実際の4角で描画（斜めでも正確に枠が合う）
+      if (corners) {
+        const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = corners;
 
-        // 枠線
+        // 枠線（polygon）
+        ctx.beginPath();
+        ctx.moveTo(tl.x, tl.y);
+        ctx.lineTo(tr.x, tr.y);
+        ctx.lineTo(br.x, br.y);
+        ctx.lineTo(bl.x, bl.y);
+        ctx.closePath();
         ctx.strokeStyle = '#00FF00';
         ctx.lineWidth = 4;
-        ctx.strokeRect(x, y, w, h);
+        ctx.stroke();
 
-        // 角マーカー
-        const markerSize = 20;
+        // 各角にドット
+        const markerRadius = 8;
         ctx.fillStyle = '#00FF00';
-
-        // 左上
-        ctx.fillRect(x, y, markerSize, 6);
-        ctx.fillRect(x, y, 6, markerSize);
-        // 右上
-        ctx.fillRect(x + w - markerSize, y, markerSize, 6);
-        ctx.fillRect(x + w - 6, y, 6, markerSize);
-        // 左下
-        ctx.fillRect(x, y + h - 6, markerSize, 6);
-        ctx.fillRect(x, y + h - markerSize, 6, markerSize);
-        // 右下
-        ctx.fillRect(x + w - markerSize, y + h - 6, markerSize, 6);
-        ctx.fillRect(x + w - 6, y + h - markerSize, 6, markerSize);
+        for (const pt of [tl, tr, br, bl]) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, markerRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       return canvas.toDataURL('image/png');
@@ -204,21 +191,19 @@ function QrFlowContent() {
           const videoElement = container?.querySelector('video') as HTMLVideoElement | null;
 
           if (videoElement && videoElement.readyState >= 2) {
-            // cornerPointsが取得できれば使う（できない場合はcreateAnnotatedImage内でフォールバック）
-            let boundingBox: QrBoundingBox | null = null;
+            // cornerPointsが取得できれば使う（できない場合はcreateAnnotatedImage内でjsQRでフォールバック）
+            let corners: QrCorners | null = null;
             const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
             if (result.cornerPoints && result.cornerPoints.length >= 4) {
-              const points = result.cornerPoints;
-              const xs = points.map(p => p.x);
-              const ys = points.map(p => p.y);
-              const w = Math.max(...xs) - Math.min(...xs);
-              const h = Math.max(...ys) - Math.min(...ys);
+              const [tl, tr, br, bl] = result.cornerPoints;
+              const w = Math.max(tr.x, br.x) - Math.min(tl.x, bl.x);
+              const h = Math.max(bl.y, br.y) - Math.min(tl.y, tr.y);
               if (w > 20 && h > 20) {
-                boundingBox = { x: Math.min(...xs), y: Math.min(...ys), width: w, height: h };
+                corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
               }
             }
 
-            const annotatedImage = createAnnotatedImage(videoElement, boundingBox);
+            const annotatedImage = createAnnotatedImage(videoElement, corners);
             if (annotatedImage) {
               setFinalImage(annotatedImage);
               sessionStorage.setItem('qrCapturedImage', annotatedImage);
