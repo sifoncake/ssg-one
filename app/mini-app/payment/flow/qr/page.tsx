@@ -85,9 +85,11 @@ function QrFlowContent() {
   const [detectedProvider, setDetectedProvider] = useState<PaymentProvider | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsRescan, setNeedsRescan] = useState(false);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
+  const handleScanRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const stopScanner = useCallback(async () => {
     if (html5QrCodeRef.current) {
@@ -134,6 +136,7 @@ function QrFlowContent() {
           const videoElement = container?.querySelector('video') as HTMLVideoElement | null;
 
           let annotatedImage: string | null = null;
+          let corners: QrCorners | null = null;
           if (videoElement && videoElement.readyState >= 2) {
             // フレームをキャプチャ
             const canvas = document.createElement('canvas');
@@ -150,7 +153,6 @@ function QrFlowContent() {
                 inversionAttempts: 'attemptBoth', // 反転QRも検出対象に
               });
 
-              let corners: QrCorners | null = null;
               if (code && code.data === decodedText) {
                 // jsQRが同じQRコードを検出 → 同一フレームの正確な座標
                 const { topLeftCorner: tl, topRightCorner: tr, bottomRightCorner: br, bottomLeftCorner: bl } = code.location;
@@ -184,6 +186,17 @@ function QrFlowContent() {
             }
           }
 
+          // スキャナーを停止
+          await stopScanner();
+          setIsScanning(false);
+
+          if (!corners) {
+            // 枠が引けない = どのQRを読んだか視覚確認できない → 再スキャンを促す
+            if (annotatedImage) setFinalImage(annotatedImage);
+            setNeedsRescan(true);
+            return;
+          }
+
           if (annotatedImage) {
             setFinalImage(annotatedImage);
             sessionStorage.setItem('qrCapturedImage', annotatedImage);
@@ -192,10 +205,6 @@ function QrFlowContent() {
           setScannedCode(decodedText);
           const provider = detectPaymentProvider(decodedText);
           setDetectedProvider(provider);
-
-          // スキャナーを停止
-          await stopScanner();
-          setIsScanning(false);
         },
         () => {
           // Ignore continuous scan errors
@@ -207,6 +216,22 @@ function QrFlowContent() {
       setIsScanning(false);
     }
   };
+
+  // handleScanRefを最新に保つ（useEffect内からstaleにならずに呼べるように）
+  useEffect(() => {
+    handleScanRef.current = handleScan;
+  });
+
+  // needsRescanがtrueになったら1.5秒後に自動再スキャン
+  useEffect(() => {
+    if (!needsRescan) return;
+    const timer = setTimeout(() => {
+      setNeedsRescan(false);
+      setFinalImage(null);
+      handleScanRef.current();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [needsRescan]);
 
   const handleStopScan = async () => {
     await stopScanner();
@@ -227,6 +252,7 @@ function QrFlowContent() {
     setDetectedProvider(null);
     setFinalImage(null);
     setError(null);
+    setNeedsRescan(false);
     sessionStorage.removeItem('qrCapturedImage');
   };
 
@@ -282,6 +308,13 @@ function QrFlowContent() {
                   </button>
                 </>
               )}
+            </div>
+          ) : needsRescan ? (
+            <div className="text-center space-y-4">
+              <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
+                <p className="text-amber-800 font-medium mb-1">読み取りを確認できませんでした</p>
+                <p className="text-amber-700 text-sm">自動で再読み込みします...</p>
+              </div>
             </div>
           ) : (
             <div className="text-center space-y-4">
