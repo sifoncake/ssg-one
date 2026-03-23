@@ -151,18 +151,13 @@ function QrFlowContent() {
               });
 
               let corners: QrCorners | null = null;
-              if (code) {
-                // jsQRが成功 → 同一フレームの正確な座標
+              if (code && code.data === decodedText) {
+                // jsQRが同じQRコードを検出 → 同一フレームの正確な座標
                 const { topLeftCorner: tl, topRightCorner: tr, bottomRightCorner: br, bottomLeftCorner: bl } = code.location;
                 corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
-              } else {
-                // jsQRが失敗 → html5-qrcodeのcornerPointsにフォールバック
-                const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
-                if (result.cornerPoints && result.cornerPoints.length >= 4) {
-                  const [tl, tr, br, bl] = result.cornerPoints;
-                  corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
-                }
               }
+              // jsQRが別のQRを検出 or 失敗した場合は枠なしで表示
+              // （cornerPointsはqrbox座標系のため全体フレームに合わないので使わない）
 
               // 検出できた場合は枠を描画
               if (corners) {
