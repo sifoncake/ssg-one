@@ -127,11 +127,13 @@ function QrFlowContent() {
         const code = jsQR(imageData.data, imageData.width, imageData.height);
         if (code) {
           const { topLeftCorner: tl, topRightCorner: tr, bottomLeftCorner: bl, bottomRightCorner: br } = code.location;
+          const xs = [tl.x, tr.x, bl.x, br.x];
+          const ys = [tl.y, tr.y, bl.y, br.y];
           boundingBox = {
-            x: Math.min(tl.x, bl.x),
-            y: Math.min(tl.y, tr.y),
-            width: Math.max(tr.x, br.x) - Math.min(tl.x, bl.x),
-            height: Math.max(bl.y, br.y) - Math.min(tl.y, tr.y),
+            x: Math.min(...xs),
+            y: Math.min(...ys),
+            width: Math.max(...xs) - Math.min(...xs),
+            height: Math.max(...ys) - Math.min(...ys),
           };
         }
       }
