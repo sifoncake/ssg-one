@@ -86,6 +86,7 @@ function QrFlowContent() {
   const [finalImage, setFinalImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsRescan, setNeedsRescan] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
@@ -222,12 +223,15 @@ function QrFlowContent() {
     handleScanRef.current = handleScan;
   });
 
-  // needsRescanがtrueになったら即座に自動再スキャン
+  // needsRescanがtrueになったら即座に自動再スキャン＋トースト表示
   useEffect(() => {
     if (!needsRescan) return;
     setNeedsRescan(false);
     setFinalImage(null);
+    setToast('再読み込みします');
     handleScanRef.current();
+    const timer = setTimeout(() => setToast(null), 2000);
+    return () => clearTimeout(timer);
   }, [needsRescan]);
 
   const handleStopScan = async () => {
@@ -254,6 +258,13 @@ function QrFlowContent() {
 
   return (
     <main className="min-h-screen bg-gray-50 pb-32">
+      {/* トースト */}
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg pointer-events-none">
+          {toast}
+        </div>
+      )}
+
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 py-3">
           <h1 className="text-lg font-bold text-gray-900">📱 QRコード支払い</h1>
