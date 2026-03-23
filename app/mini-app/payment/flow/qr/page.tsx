@@ -230,9 +230,14 @@ function QrFlowContent() {
     setFinalImage(null);
     setToast('再読み込みします');
     handleScanRef.current();
+  }, [needsRescan]);
+
+  // トーストを2秒後に消す（needsRescanのサイクルとは独立）
+  useEffect(() => {
+    if (!toast) return;
     const timer = setTimeout(() => setToast(null), 2000);
     return () => clearTimeout(timer);
-  }, [needsRescan]);
+  }, [toast]);
 
   const handleStopScan = async () => {
     await stopScanner();
