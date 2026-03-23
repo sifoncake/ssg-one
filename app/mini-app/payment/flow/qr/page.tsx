@@ -15,6 +15,7 @@
 import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Html5Qrcode, Html5QrcodeResult } from 'html5-qrcode';
+import jsQR from 'jsqr';
 
 /**
  * 金種判定
@@ -106,10 +107,10 @@ function QrFlowContent() {
   }, [stopScanner]);
 
   // QR検出位置に枠を描画した画像を生成
-  const createAnnotatedImage = async (
+  const createAnnotatedImage = (
     videoElement: HTMLVideoElement,
     boundingBox: QrBoundingBox | null
-  ): Promise<string | null> => {
+  ): string | null => {
     try {
       const canvas = document.createElement('canvas');
       canvas.width = videoElement.videoWidth;
@@ -120,35 +121,18 @@ function QrFlowContent() {
       // ビデオフレームを描画
       ctx.drawImage(videoElement, 0, 0);
 
-      // boundingBoxが未確定の場合はキャプチャ画像から再検出
+      // boundingBoxが未確定の場合はjsQRでキャプチャ画像から正確な位置を取得
       if (!boundingBox) {
-        // 方法1: BarcodeDetector APIでキャンバス上のQRコード位置を正確に取得
-        if ('BarcodeDetector' in window) {
-          try {
-            const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-            const bitmap = await createImageBitmap(canvas);
-            const barcodes = await detector.detect(bitmap);
-            if (barcodes.length > 0) {
-              const b = barcodes[0].boundingBox;
-              boundingBox = { x: b.x, y: b.y, width: b.width, height: b.height };
-            }
-          } catch { /* 非対応ブラウザは無視 */ }
-        }
-
-        // 方法2: qrboxの位置をフォールバックとして使用
-        if (!boundingBox) {
-          const videoRect = videoElement.getBoundingClientRect();
-          if (videoRect.width > 0 && videoRect.height > 0) {
-            const scaleX = videoElement.videoWidth / videoRect.width;
-            const scaleY = videoElement.videoHeight / videoRect.height;
-            const qrboxSize = 250;
-            boundingBox = {
-              x: Math.max(0, (videoRect.width - qrboxSize) / 2) * scaleX,
-              y: Math.max(0, (videoRect.height - qrboxSize) / 2) * scaleY,
-              width: qrboxSize * scaleX,
-              height: qrboxSize * scaleY,
-            };
-          }
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code) {
+          const { topLeftCorner: tl, topRightCorner: tr, bottomLeftCorner: bl, bottomRightCorner: br } = code.location;
+          boundingBox = {
+            x: Math.min(tl.x, bl.x),
+            y: Math.min(tl.y, tr.y),
+            width: Math.max(tr.x, br.x) - Math.min(tl.x, bl.x),
+            height: Math.max(bl.y, br.y) - Math.min(tl.y, tr.y),
+          };
         }
       }
 
@@ -232,7 +216,7 @@ function QrFlowContent() {
               }
             }
 
-            const annotatedImage = await createAnnotatedImage(videoElement, boundingBox);
+            const annotatedImage = createAnnotatedImage(videoElement, boundingBox);
             if (annotatedImage) {
               setFinalImage(annotatedImage);
               sessionStorage.setItem('qrCapturedImage', annotatedImage);
