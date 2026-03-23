@@ -106,63 +106,6 @@ function QrFlowContent() {
     };
   }, [stopScanner]);
 
-  // QR検出位置に枠を描画した画像を生成
-  const createAnnotatedImage = (
-    videoElement: HTMLVideoElement,
-    corners: QrCorners | null
-  ): string | null => {
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoElement.videoWidth;
-      canvas.height = videoElement.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-
-      // ビデオフレームを描画
-      ctx.drawImage(videoElement, 0, 0);
-
-      // cornersが未確定の場合はjsQRでキャプチャ画像から正確な位置を取得
-      if (!corners) {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code) {
-          const { topLeftCorner: tl, topRightCorner: tr, bottomRightCorner: br, bottomLeftCorner: bl } = code.location;
-          corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
-        }
-      }
-
-      // QR検出位置を実際の4角で描画（斜めでも正確に枠が合う）
-      if (corners) {
-        const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = corners;
-
-        // 枠線（polygon）
-        ctx.beginPath();
-        ctx.moveTo(tl.x, tl.y);
-        ctx.lineTo(tr.x, tr.y);
-        ctx.lineTo(br.x, br.y);
-        ctx.lineTo(bl.x, bl.y);
-        ctx.closePath();
-        ctx.strokeStyle = '#00FF00';
-        ctx.lineWidth = 4;
-        ctx.stroke();
-
-        // 各角にドット
-        const markerRadius = 8;
-        ctx.fillStyle = '#00FF00';
-        for (const pt of [tl, tr, br, bl]) {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, markerRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      return canvas.toDataURL('image/png');
-    } catch (e) {
-      console.error('Failed to create annotated image:', e);
-      return null;
-    }
-  };
-
   const handleScan = async () => {
     if (!scannerRef.current) return;
 
@@ -186,28 +129,69 @@ function QrFlowContent() {
           qrbox: { width: 250, height: 250 },
         },
         async (decodedText: string, decodedResult: Html5QrcodeResult) => {
-          // ビデオ要素を取得してキャプチャ
+          // ★ まずフレームを確保する（ビデオが次フレームに進む前に）
           const container = document.getElementById(scannerId);
           const videoElement = container?.querySelector('video') as HTMLVideoElement | null;
 
+          let annotatedImage: string | null = null;
           if (videoElement && videoElement.readyState >= 2) {
-            // cornerPointsが取得できれば使う（できない場合はcreateAnnotatedImage内でjsQRでフォールバック）
-            let corners: QrCorners | null = null;
-            const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
-            if (result.cornerPoints && result.cornerPoints.length >= 4) {
-              const [tl, tr, br, bl] = result.cornerPoints;
-              const w = Math.max(tr.x, br.x) - Math.min(tl.x, bl.x);
-              const h = Math.max(bl.y, br.y) - Math.min(tl.y, tr.y);
-              if (w > 20 && h > 20) {
-                corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
-              }
-            }
+            // フレームをキャプチャ
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            const ctx = canvas.getContext('2d');
 
-            const annotatedImage = createAnnotatedImage(videoElement, corners);
-            if (annotatedImage) {
-              setFinalImage(annotatedImage);
-              sessionStorage.setItem('qrCapturedImage', annotatedImage);
+            if (ctx) {
+              ctx.drawImage(videoElement, 0, 0); // この時点でフレームを確定
+
+              // 同じキャプチャフレームでjsQRを実行（タイミングずれなし）
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'attemptBoth', // 反転QRも検出対象に
+              });
+
+              let corners: QrCorners | null = null;
+              if (code) {
+                // jsQRが成功 → 同一フレームの正確な座標
+                const { topLeftCorner: tl, topRightCorner: tr, bottomRightCorner: br, bottomLeftCorner: bl } = code.location;
+                corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
+              } else {
+                // jsQRが失敗 → html5-qrcodeのcornerPointsにフォールバック
+                const result = decodedResult.result as { cornerPoints?: { x: number; y: number }[] };
+                if (result.cornerPoints && result.cornerPoints.length >= 4) {
+                  const [tl, tr, br, bl] = result.cornerPoints;
+                  corners = { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl };
+                }
+              }
+
+              // 検出できた場合は枠を描画
+              if (corners) {
+                const { topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl } = corners;
+                ctx.beginPath();
+                ctx.moveTo(tl.x, tl.y);
+                ctx.lineTo(tr.x, tr.y);
+                ctx.lineTo(br.x, br.y);
+                ctx.lineTo(bl.x, bl.y);
+                ctx.closePath();
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                ctx.fillStyle = '#00FF00';
+                for (const pt of [tl, tr, br, bl]) {
+                  ctx.beginPath();
+                  ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+              }
+
+              annotatedImage = canvas.toDataURL('image/png');
             }
+          }
+
+          if (annotatedImage) {
+            setFinalImage(annotatedImage);
+            sessionStorage.setItem('qrCapturedImage', annotatedImage);
           }
 
           setScannedCode(decodedText);
