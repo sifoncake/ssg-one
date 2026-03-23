@@ -222,15 +222,12 @@ function QrFlowContent() {
     handleScanRef.current = handleScan;
   });
 
-  // needsRescanがtrueになったら1.5秒後に自動再スキャン
+  // needsRescanがtrueになったら即座に自動再スキャン
   useEffect(() => {
     if (!needsRescan) return;
-    const timer = setTimeout(() => {
-      setNeedsRescan(false);
-      setFinalImage(null);
-      handleScanRef.current();
-    }, 1500);
-    return () => clearTimeout(timer);
+    setNeedsRescan(false);
+    setFinalImage(null);
+    handleScanRef.current();
   }, [needsRescan]);
 
   const handleStopScan = async () => {
@@ -252,7 +249,6 @@ function QrFlowContent() {
     setDetectedProvider(null);
     setFinalImage(null);
     setError(null);
-    setNeedsRescan(false);
     sessionStorage.removeItem('qrCapturedImage');
   };
 
@@ -308,13 +304,6 @@ function QrFlowContent() {
                   </button>
                 </>
               )}
-            </div>
-          ) : needsRescan ? (
-            <div className="text-center space-y-4">
-              <div className="bg-amber-50 border border-amber-300 rounded-lg p-4">
-                <p className="text-amber-800 font-medium mb-1">読み取りを確認できませんでした</p>
-                <p className="text-amber-700 text-sm">自動で再読み込みします...</p>
-              </div>
             </div>
           ) : (
             <div className="text-center space-y-4">
