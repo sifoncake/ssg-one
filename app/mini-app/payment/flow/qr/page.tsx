@@ -223,6 +223,11 @@ function QrFlowContent() {
     handleScanRef.current = handleScan;
   });
 
+  // 画面表示時に自動でスキャン開始
+  useEffect(() => {
+    handleScanRef.current();
+  }, []);
+
   // needsRescanがtrueになったら即座に自動再スキャン＋トースト表示
   useEffect(() => {
     if (!needsRescan) return;
@@ -297,29 +302,12 @@ function QrFlowContent() {
                 style={{ minHeight: isScanning ? '300px' : '0' }}
               />
 
-              {isScanning ? (
-                <button
-                  onClick={handleStopScan}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg"
-                >
-                  キャンセル
-                </button>
-              ) : (
-                <>
-                  <div className="w-24 h-24 mx-auto bg-gray-100 rounded-lg flex items-center justify-center">
-                    <span className="text-5xl">📷</span>
-                  </div>
-                  <p className="text-gray-600">
-                    お客様のQRコードをスキャンしてください
-                  </p>
-                  <button
-                    onClick={handleScan}
-                    className="w-full py-4 rounded-lg font-bold text-lg bg-green-600 text-white active:bg-green-700"
-                  >
-                    QRコードをスキャン
-                  </button>
-                </>
-              )}
+              <button
+                onClick={handleStopScan}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg"
+              >
+                キャンセル
+              </button>
             </div>
           ) : (
             <div className="text-center space-y-4">
