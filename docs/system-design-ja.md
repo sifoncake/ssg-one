@@ -143,9 +143,16 @@ ssg-one/
 ├── app/                           # Next.js 14 フロントエンド
 │   ├── api/                       # APIルート
 │   │   ├── auth/
-│   │   │   ├── create-session/    # セッション管理
-│   │   │   └── verify-magic/      # マジックリンク検証
-│   │   └── send-line/             # LINEメッセージプロキシ
+│   │   │   ├── create-session/        # セッション管理
+│   │   │   ├── generate-magic-link/   # マジックリンク生成
+│   │   │   ├── verify-liff/           # LIFFトークン検証
+│   │   │   └── verify-magic/          # マジックリンク検証
+│   │   ├── attendance/            # 勤怠API
+│   │   ├── products/              # 商品API
+│   │   ├── sales/                 # 売上API
+│   │   ├── send-line/             # LINEメッセージプロキシ
+│   │   ├── stores/                # 店舗API
+│   │   └── user/role/             # ユーザーロールAPI
 │   │
 │   ├── admin/                     # 管理画面ページ
 │   │   ├── dashboard/             # 店舗パフォーマンス概要
@@ -158,6 +165,19 @@ ssg-one/
 │   │   ├── users/                 # ユーザー管理
 │   │   └── settings/              # システム設定
 │   │
+│   ├── mini-app/                  # LIFFミニアプリ（LINE内WebViewで動作）
+│   │   ├── admin-auth/            # ミニアプリ内管理者認証
+│   │   ├── attendance/            # 勤怠打刻
+│   │   └── payment/               # 決済フロー
+│   │       ├── method/            # 金種選択
+│   │       ├── flow/
+│   │       │   ├── qr/            # QRコード読み取り（jsQR + html5-qrcode）
+│   │       │   ├── card/          # カード決済
+│   │       │   ├── cash/          # 現金決済
+│   │       │   └── coupon/        # 回数券
+│   │       ├── result/            # 決済結果
+│   │       └── complete/          # 完了画面
+│   │
 │   ├── auth/
 │   │   └── magic/                 # マジックリンク着地ページ
 │   │
@@ -166,7 +186,9 @@ ssg-one/
 │   │   └── Navigation.tsx         # ナビゲーション
 │   │
 │   ├── login/                     # ログインページ
+│   ├── privacy/                   # プライバシーポリシー
 │   ├── signup/                    # 新規登録ページ
+│   ├── users/                     # ユーザーページ
 │   └── page.tsx                   # ホームページ
 │
 ├── lib/                           # 共通ユーティリティ
@@ -181,6 +203,7 @@ ssg-one/
 │   │   ├── admin_handler.go       # 管理者操作
 │   │   ├── auth_handler.go        # 認証
 │   │   ├── broadcast_handler.go   # LINE一斉送信
+│   │   ├── dev_task_handler.go    # devタスク登録（開発用）
 │   │   ├── line_webhook.go        # LINE Webhook処理
 │   │   └── push_handler.go        # プッシュ通知
 │   │
@@ -197,7 +220,10 @@ ssg-one/
 │   ├── seed-multistore.sql        # 店舗・スタッフデータ
 │   ├── seed-multistore-customers.sql
 │   ├── seed-multistore-sales.sql
-│   └── migration-add-roles.sql    # ロールマイグレーション
+│   ├── migration-add-roles.sql    # ロールマイグレーション
+│   ├── migration-attendance.sql   # 勤怠テーブル
+│   ├── migration-products.sql     # 商品テーブル
+│   └── migration-sales-redesign.sql # 売上スキーマ再設計
 │
 └── docs/                          # ドキュメント
     ├── system-design.md           # システム設計書（英語）
@@ -224,11 +250,12 @@ ssg-one/
 **ルーティング:**
 | パス | メソッド | ハンドラー | 説明 |
 |------|----------|------------|------|
-| `/line-webhook` | POST | LINEWebhookHandler | LINEメッセージイベント |
+| `/line-webhook` `/webhook` | POST | LINEWebhookHandler | LINEメッセージイベント |
 | `/send-line` | POST | BroadcastHandler | 一斉送信 |
 | `/broadcast` | POST | BroadcastHandler | 一斉送信（エイリアス） |
 | `/send-push` | POST | PushHandler | 特定ユーザーへのプッシュ |
 | `/verify-magic` | POST | AuthHandler | マジックリンク検証 |
+| `/dev-task-notify` | POST | DevTaskHandler | devタスク通知受信（開発用） |
 
 #### 3.2 LINE Webhookフロー
 
@@ -250,6 +277,8 @@ ssg-one/
 4. ユーザープロファイルをSupabaseに登録/更新
 5. メッセージをルーティング:
    - 「管理画面」→ 管理者マジックリンクフロー
+   - 「メニュー」→ LIFFミニアプリURL返却
+   - 「dev\n〜」「dev-deploy\n〜」→ devタスク登録（DEV_LINE_USER_IDのみ）
    - その他 → Claude AIが応答生成
 6. LINE Reply APIで返信
 
@@ -368,20 +397,53 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL
 - QRコード決済
 - 回数券
 
-### 4.5 LINE Bot連携
+### 4.5 LIFFミニアプリ
+
+LINE内WebViewで動作するLIFFアプリ。スタッフが実際の業務で使用する操作画面。
+
+**エントリーポイント**: LINEで「メニュー」と送信 → LIFF URLを受け取ってLINE内ブラウザで起動
+
+**画面構成:**
+
+| 画面 | パス | 用途 |
+|------|------|------|
+| 勤怠打刻 | `/mini-app/attendance` | 出退勤の記録 |
+| 金種選択 | `/mini-app/payment/method` | 決済方法の選択 |
+| QR決済 | `/mini-app/payment/flow/qr` | QRコードスキャン・金種判定 |
+| カード決済 | `/mini-app/payment/flow/card` | カード決済フロー |
+| 現金決済 | `/mini-app/payment/flow/cash` | 現金決済フロー |
+| 回数券 | `/mini-app/payment/flow/coupon` | 回数券決済フロー |
+| 決済結果 | `/mini-app/payment/result` | 決済確認・完了 |
+
+**QRコード決済の実装:**
+- `html5-qrcode`（ZXing）でスキャン、`jsQR`で同一キャプチャフレームから角の座標を取得
+- 検出した4角の座標でポリゴン枠を描画（斜め対応）
+- 複数QRが写っている場合は `code.data === decodedText` で同一性を確認
+- 枠が引けない場合は自動再スキャン（トースト通知あり）
+
+**金種判定**: QRコードのURLパターンでPayPay / LINE Pay / 楽天ペイ / d払い / au PAY / メルペイを判定
+
+### 4.6 LINE Bot連携
 
 **機能:**
 - **顧客問い合わせ**: Claude AIによる自然言語応答
 - **スタッフアクセス**: 「管理画面」キーワードでマジックリンク発行（現状は管理者のみ。将来はロールに応じた入口・表示範囲を拡張する想定）
+- **ミニアプリ起動**: 「メニュー」キーワードでLIFF URL返却
 - **一斉送信**: LINE友だち全員へのメッセージ送信
 - **プッシュ**: 特定ユーザーへの送信
 
 **メッセージルーティング:**
 ```go
-if strings.TrimSpace(userMessage) == "管理画面" {
-    replyMessage = h.adminHandler.HandleAdminRequest(userID)
-} else {
-    replyMessage = h.handleClaudeMessage(userMessage)
+switch {
+case trimmedMessage == "管理画面":
+    // マジックリンク生成・送信
+case trimmedMessage == "メニュー":
+    // LIFFミニアプリURL返却
+case strings.HasPrefix(trimmedMessage, "dev\n"),
+     strings.HasPrefix(trimmedMessage, "dev-deploy\n"):
+    // devタスク登録（DEV_LINE_USER_IDのみ許可）
+default:
+    // Claude AIへ転送
 }
 ```
 
@@ -699,6 +761,7 @@ CREATE TABLE magic_link_tokens (
 | バージョン | 日付 | 作成者 | 変更内容 |
 |------------|------|--------|----------|
 | 1.0 | 2025-02-04 | SSG ONEチーム | 初版システム設計書 |
+| 1.1 | 2026-03-24 | SSG ONEチーム | LIFFミニアプリ・勤怠・LIFF認証・devコマンド・追加APIルートを反映 |
 
 ---
 
