@@ -80,7 +80,6 @@ function QrFlowContent() {
   const amount = Number(searchParams.get('amount') || 0);
   const method = searchParams.get('method') || 'QRコード';
 
-  const [isScanning, setIsScanning] = useState(false);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [detectedProvider, setDetectedProvider] = useState<PaymentProvider | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
@@ -113,7 +112,6 @@ function QrFlowContent() {
     if (!scannerRef.current) return;
 
     setError(null);
-    setIsScanning(true);
     setFinalImage(null);
 
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -189,8 +187,7 @@ function QrFlowContent() {
 
           // スキャナーを停止
           await stopScanner();
-          setIsScanning(false);
-
+    
           if (!corners) {
             // 枠が引けない = どのQRを読んだか視覚確認できない → 再スキャンを促す
             if (annotatedImage) setFinalImage(annotatedImage);
@@ -214,7 +211,6 @@ function QrFlowContent() {
     } catch (e) {
       console.error('Scan error:', e);
       setError('カメラの起動に失敗しました。カメラへのアクセスを許可してください。');
-      setIsScanning(false);
     }
   };
 
@@ -246,7 +242,6 @@ function QrFlowContent() {
 
   const handleStopScan = async () => {
     await stopScanner();
-    setIsScanning(false);
   };
 
   const handleComplete = () => {
@@ -298,8 +293,8 @@ function QrFlowContent() {
             <div className="text-center space-y-4">
               <div
                 id="qr-scanner-container"
-                className={`w-full max-w-[300px] mx-auto ${isScanning ? '' : 'hidden'}`}
-                style={{ minHeight: isScanning ? '300px' : '0' }}
+                className="w-full max-w-[300px] mx-auto"
+                style={{ minHeight: '300px' }}
               />
 
               <button
