@@ -248,25 +248,76 @@ admins / admin_tokens / line_users (認証系)
 
 ## 認証系テーブル
 
-### admins
-管理者マスタ（LINE User ID とメールアドレスの紐付け）
+### admins（管理者マスタ）
 
-### admin_tokens
-マジックリンク認証用の一時トークン
+LINE Bot経由で管理画面にアクセスできるユーザーの管理。
 
-### line_users
-LINEユーザー情報（Bot利用者）
+| カラム | 型 | NULL | 説明 |
+|--------|-----|------|------|
+| line_user_id | TEXT | NO | LINE User ID（主キー相当） |
+| email | TEXT | NO | メールアドレス |
 
 ---
 
-## 権限レベル
+### admin_tokens（マジックリンクトークン）
 
-| レベル | ロール | 日本語 | アクセス範囲 |
-|--------|--------|--------|-------------|
+マジックリンク認証用の一時トークン。有効期限は**10分・使い捨て**。
+
+| カラム | 型 | NULL | 説明 |
+|--------|-----|------|------|
+| token | TEXT | NO | ワンタイムトークン（ユニーク） |
+| line_user_id | TEXT | NO | 発行対象のLINE User ID |
+| two_factor_code | TEXT | NO | 6桁の2FAコード |
+| fingerprint | TEXT | YES | デバイスフィンガープリント（LINE User IDを使用） |
+| expires_at | TIMESTAMPTZ | NO | 有効期限（発行から10分） |
+| used | BOOLEAN | NO | 使用済みフラグ（default: false） |
+| created_at | TIMESTAMPTZ | NO | 作成日時 |
+
+---
+
+### line_users（LINEユーザー）
+
+LINE Botと会話したユーザーを自動登録するテーブル。
+
+| カラム | 型 | NULL | 説明 |
+|--------|-----|------|------|
+| line_user_id | TEXT | NO | LINE User ID（ユニーク） |
+| display_name | TEXT | YES | LINEの表示名 |
+| picture_url | TEXT | YES | プロフィール画像URL |
+| first_seen_at | TIMESTAMPTZ | YES | 初回メッセージ日時 |
+| last_seen_at | TIMESTAMPTZ | NO | 最終メッセージ日時 |
+
+---
+
+## 権限ロールについて
+
+本システムには「ロール」と呼ぶ概念が2箇所に存在するため注意。
+
+### ① staff.role（スタッフの職種）
+
+`staff` テーブルの `role` カラム。スタッフの職種・役職を表す。
+
+| 値 | 意味 |
+|----|------|
+| 経営者 | オーナー・経営者 |
+| 管理者 | 全店舗管理者 |
+| 店長 | 店舗責任者 |
+| 副店長 | 店舗副責任者 |
+| 従業員 | 一般スタッフ |
+| 端末 | 店舗端末（device_codeが必須） |
+
+### ② staff_store_assignments.role（アクセス権限）
+
+`staff_store_assignments` テーブルの `role` カラム。システムへのアクセス範囲を制御する。
+
+| レベル | 値 | 日本語 | アクセス範囲 |
+|--------|-----|--------|-------------|
 | 1 | staff | 一般従業員 | 配属店舗のみ |
 | 2 | store_manager | 店舗管理者 | 配属店舗のみ |
 | 3 | regional_manager | 全店管理者 | 全店舗 |
 | 4 | system_admin | システム管理者 | 全店舗 + システム設定 |
+
+regional_manager / system_admin は `store_id = NULL`（特定店舗に縛られない）。
 
 ---
 
@@ -286,5 +337,6 @@ LINEユーザー情報（Bot利用者）
 
 | 日付 | 内容 |
 |------|------|
-| 2024-12 | 初版作成 |
-| 2025-03 | sales/sale_items 分離、products追加、attendance追加 |
+| 2026-03 | 初版作成 |
+| 2026-03 | sales/sale_items 分離、products追加、attendance追加 |
+| 2026-03-24 | 認証系テーブルのカラム詳細追記、権限ロールの2種類を明確に分離して記載 |
