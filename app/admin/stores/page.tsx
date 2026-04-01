@@ -23,7 +23,7 @@ interface SupabaseStaffAssignment {
 
 interface SupabaseSale {
   store_id: string;
-  amount: number;
+  total_amount: number;
 }
 
 // Formatted types for component state
@@ -79,7 +79,7 @@ export default function StoresPage() {
 
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('store_id, amount')
+        .select('store_id, total_amount')
         .gte('date', `${currentMonth}-01`)
         .lte('date', `${currentMonth}-${lastDay.toString().padStart(2, '0')}`);
 
@@ -97,7 +97,7 @@ export default function StoresPage() {
 
         const revenue = typedSales
           .filter((s) => s.store_id === store.id)
-          .reduce((sum, s) => sum + (s.amount || 0), 0);
+          .reduce((sum, s) => sum + (s.total_amount || 0), 0);
 
         const performancePercentage = store.monthly_target > 0
           ? (revenue / store.monthly_target) * 100
